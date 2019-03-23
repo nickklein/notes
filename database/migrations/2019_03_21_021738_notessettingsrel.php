@@ -17,7 +17,8 @@ class Notessettingsrel extends Migration
         Schema::create('notes_settings_rel', function (Blueprint $table) {
             $table->bigIncrements('nsettingrel_id');
             $table->mediumInteger('nsetting_id')->unsigned();
-            $table->smallInteger('user_id')->unsigned();
+            $table->bigInteger('note_id')->unsigned();
+            $table->unique('nsetting_id', 'note_id');
         });
     }
 
