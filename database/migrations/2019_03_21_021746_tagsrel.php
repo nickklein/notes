@@ -19,6 +19,7 @@ class Tagsrel extends Migration
             $table->mediumInteger('tag_id')->unsigned();
             $table->mediumInteger('note_id')->unsigned();
             $table->smallInteger('user_id')->unsigned();
+            $table->unique('tag_id', 'user_id');
         });
     }
 

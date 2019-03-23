@@ -16,8 +16,7 @@ class Notessettings extends Migration
         //
         Schema::create('notes_settings', function (Blueprint $table) {
             $table->mediumIncrements('nsetting_id');
-            $table->string('nsetting_key', 100);
-            $table->string('nsetting_value', 100);
+            $table->string('nsetting_name', 100);
         });
     }
 

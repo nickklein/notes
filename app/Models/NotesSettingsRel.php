@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class NotesSettingsRel extends Model
 {
     //
-    protected $table = 'notes_settings';
-    protected $primaryKey = 'nsetting_id';
+    protected $table = 'notes_settings_rel';
+    protected $primaryKey = 'nsettingrel_id';
     public $timestamps = false;
 }
