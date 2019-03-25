@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\Notes;
+use notes\Models\Notes;
 use Faker\Generator as Faker;
 
 $factory->define(Notes::class, function (Faker $faker) {

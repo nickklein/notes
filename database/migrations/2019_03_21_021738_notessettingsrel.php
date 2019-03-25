@@ -18,7 +18,7 @@ class Notessettingsrel extends Migration
             $table->bigIncrements('nsettingrel_id');
             $table->mediumInteger('nsetting_id')->unsigned();
             $table->bigInteger('note_id')->unsigned();
-            $table->unique('nsetting_id', 'note_id');
+            $table->unique(['nsetting_id', 'note_id']);
         });
     }
 

@@ -14,6 +14,7 @@ class NotesTablesSeeder extends Seeder
      */
     public function run()
     {
+        $notes_insert = array();
         // Generate Notes
         factory(\App\Models\Notes::class, 500)->create();
 
@@ -25,6 +26,14 @@ class NotesTablesSeeder extends Seeder
         NotesSettings::insert($settings);
 
         //factory(\App\Models\NotesSettingsRel::class, 255)->create();
+        $notes = Notes::inRandomOrder()->limit(50)->get();
+        foreach($notes as $note) {
+            $notes_insert[] = array(
+                'note_id' => $note->note_id,
+                'nsetting_id' => 2
+            );
+        }
+        NotesSettingsRel::insert($notes_insert);
         // Generate Notes Settings Rel
 
     }

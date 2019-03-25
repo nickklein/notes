@@ -1,0 +1,25 @@
+body {
+    background: $body-bg;
+}
+
+html {
+	height: 100%;
+}
+
+body {
+	margin: 0;
+    height: 100%;
+    font-family: "Roboto", sans-serif;
+}
+
+a {
+    &:hover {
+        text-decoration: none;
+    }
+}
+
+.container-fluid {
+    padding-left: 0;
+    padding-right: 0;
+    overflow: hidden;
+}
