@@ -7,8 +7,8 @@ $factory->define(Notes::class, function (Faker $faker) {
     return [
         //
         'note_title' => substr($faker->text, 0, 30),
-        'content' => $faker->text,
-        'user_id' => rand(1, 100),
+        'note_content' => $faker->text,
+        'published' => 0,
         'order' => 0
     ];
 });

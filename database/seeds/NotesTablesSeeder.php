@@ -1,8 +1,9 @@
 <?php
 
-use App\Models\Notes;
-use App\Models\NotesSettings;
-use App\Models\NotesSettingsRel;
+use notes\Models\Notes;
+use notes\Models\NotesRel;
+use notes\Models\NotesSettings;
+use notes\Models\NotesSettingsRel;
 use Illuminate\Database\Seeder;
 
 class NotesTablesSeeder extends Seeder
@@ -15,14 +16,24 @@ class NotesTablesSeeder extends Seeder
     public function run()
     {
         $notes_insert = array();
-        // Generate Notes
-        factory(\App\Models\Notes::class, 500)->create();
-
-        // Generate Notes Settings
+        $note_rel = array();
         $settings = array(
             array('nsetting_name' => 'encryption'),
             array('nsetting_name' => 'starred'),
         );
+
+        // Generate Notes
+        factory(\notes\Models\Notes::class, 500)->create();
+
+        for($i = 1; $i < 500; $i++) {
+            $note_rel[] = array(
+                'note_id' => $i,
+                'user_id' => rand(0,50),
+                'permission' => 'admin'
+            );
+        }
+        NotesRel::insert($note_rel);
+
         NotesSettings::insert($settings);
 
         //factory(\App\Models\NotesSettingsRel::class, 255)->create();
@@ -34,7 +45,6 @@ class NotesTablesSeeder extends Seeder
             );
         }
         NotesSettingsRel::insert($notes_insert);
-        // Generate Notes Settings Rel
 
     }
 }
