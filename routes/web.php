@@ -18,3 +18,6 @@ Route::get('/', function () {
 Auth::routes();
 
 Route::get('/home', 'HomeController@index')->name('home');
+Route::get('/tags/all-tags', 'TagsController@getMyTags');
+Route::get('/notes/feed/', 'NotesController@getUserNotes')->name('notesFeed');
+Route::get('/notes/feed/{search}', 'NotesController@getUserNotes')->name('notesFeed');

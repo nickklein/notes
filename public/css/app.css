@@ -3208,7 +3208,25 @@ a:hover {
   height: 100%;
 }
 
+#add-more {
+  color: #fff;
+  position: fixed;
+  display: block;
+  right: 25px;
+  bottom: 25px;
+  font-size: 2em;
+  font-weight: bold;
+  border-radius: 50%;
+  background: #298DD6;
+  z-index: 100;
+  width: 50px;
+  height: 50px;
+  text-align: center;
+}
+
 .sidebar {
+  display: flex;
+  flex-direction: column;
   background: #FCFCFC;
   border-right: #e6e6e6 1px solid;
 }
@@ -3225,6 +3243,23 @@ a:hover {
   overflow-x: hidden;
 }
 
+.sidebar header.search {
+  padding: 0.5em 1.5em;
+}
+
+.sidebar header.search #search {
+  display: block;
+  background-image: url("/images/icons/search.png");
+  background-size: 15px 15px;
+  background-repeat: no-repeat;
+  background-position: 10px 50%;
+  border-radius: 10px;
+  border: 1px solid #f0f0f0;
+  padding: 5px 6px 5px 40px;
+  width: 100%;
+  margin-bottom: 10px;
+}
+
 .sidebar .notes-container {
   overflow: auto;
   height: 100%;
@@ -3234,7 +3269,7 @@ a:hover {
   color: #000;
   display: block;
   width: 100%;
-  padding: 1.1em;
+  padding: 2.1em 1.2em;
 }
 
 .sidebar .notes-container a h5 {
@@ -3245,6 +3280,7 @@ a:hover {
   font-size: 0.8em;
   color: #AAA;
   margin-bottom: 0;
+  line-height: 1.1em;
 }
 
 .sidebar .notes-container a:hover {
@@ -3276,5 +3312,17 @@ a:hover {
 .toolbar .left-tools li a img {
   width: 100%;
   height: 100%;
+}
+
+.toolbar .account a {
+  width: 50px;
+  height: 50px;
+  display: block;
+}
+
+.toolbar .account a img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
 }
 
