@@ -4,16 +4,11 @@
 
 <a href="#" id="add-more">+</a>
 <div class="container-fluid">
-    <div class="row">
+    <div class="container-row row">
     <aside class="sidebar-container ol-xl-2 col-md-2">
         <div class="sidebar">
-                <header class="search">
-                        <input type="text" name="search" id="search" />
-                        <tags-sidebar></tags-sidebar>
-                </header>
-
+                <search-sidebar></search-sidebar>
                 <notes-sidebar></notes-sidebar>
-                
         </div>
 
     </aside>
@@ -31,9 +26,13 @@
                     <a href="#" class="pull-right"><img src="{{url('/')}}/images/profile_full.jpg" alt="nick klein"></a>
                 </div>
         </header>
-        <div class="tags"></div>
+        <div class="tags">
+            <tags></tags>
+        </div>
         <div class="notes-container">
-                <div class="content"></div>
+                <div class="content">
+                    <tinymce></tinymce>
+                </div>
         </div>
     </main>
     </div>
