@@ -11,6 +11,7 @@ import Vue from 'vue';
 import vueResource from 'vue-resource';
 Vue.use(vueResource)
 
+export const bus = new Vue();
 
 /**
  * The following block of code may be used to automatically register your
@@ -24,8 +25,12 @@ Vue.use(vueResource)
 // files.keys().map(key => Vue.component(key.split('/').pop().split('.')[0], files(key).default));
 
 //Vue.component('example-component', require('./components/ExampleComponent.vue').default);
+Vue.component('search-sidebar', require('./components/SearchComponent.vue').default);
 Vue.component('notes-sidebar', require('./components/NotesSidebarComponent.vue').default);
 Vue.component('tags-sidebar', require('./components/TagsSidebarComponent.vue').default);
+Vue.component('tags', require('./components/MainTagsComponent.vue').default);
+Vue.component('tinymce', require('./components/tinyMCEComponent.vue').default);
+
 /**
  * Next, we will create a fresh Vue application instance and attach it to
  * the page. Then, you may begin adding components to this application

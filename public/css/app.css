@@ -3202,7 +3202,7 @@ a:hover {
 }
 
 #app .container-fluid,
-#app .container-fluid .row,
+#app .container-fluid .container-row,
 #app .sidebar-container,
 #app .sidebar {
   height: 100%;

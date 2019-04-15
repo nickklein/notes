@@ -30,4 +30,11 @@ class Notes extends Model
                         });
                 });
     }
+    public function scopeGetNote(Builder $query, $user_id, $note_id)
+    {
+        return $query
+                ->join('notes_rel', 'notes.note_id', 'notes_rel.note_id')
+                ->where('notes_rel.user_id', $user_id)
+                ->where('notes.note_id', $note_id);
+    }
 }

@@ -1,7 +1,7 @@
 <template>
         <ul class="notes-container">
-            <li class="note" v-for="item in items">
-                <a href="#">
+            <li class="note" v-for="(item, index) in items">
+                <a href="#" :note-id="item.note_id">
                     <h5>{{item.note_title}}</h5>
                     <p class="caption">{{item.note_content}}</p>
                 </a>
@@ -10,6 +10,9 @@
 </template>
 
 <script>
+    import {bus} from '../app';
+
+
     export default {
         name: 'notes-sidebar',
         data() {
@@ -18,10 +21,16 @@
             }
         },
         created: function() {
-            var search = 'est';
-            this.$http.get('/notes/feed/' + search)
+            this.$http.get('/notes/feed/')
             .then(function(response) {
                 this.items = response.data;
+            });
+
+            bus.$on('filterSidebar', (search) => {
+                this.$http.get('/notes/feed/' + search)
+                .then(function(response) {
+                    this.items = response.data;
+                });
             });
         }
 

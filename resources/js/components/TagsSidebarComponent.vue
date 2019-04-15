@@ -20,7 +20,6 @@
         created: function() {
             this.$http.get('tags/all-tags')
             .then(function(response) {
-                console.log(response.data);
                 this.items = response.data;
             });
         }

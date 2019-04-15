@@ -3,6 +3,8 @@
 namespace notes\Http\Controllers;
 
 use Illuminate\Http\Request;
+use notes\Models\Notes;
+use Auth;
 
 class HomeController extends Controller
 {
@@ -21,56 +23,18 @@ class HomeController extends Controller
      *
      * @return \Illuminate\Contracts\Support\Renderable
      */
-    public function index()
+    public function index(Request $request)
     {
-        return view('app');
+        $pageid = 0;
+        // If id is passed to the route, then use it, if not get the first in users id;
+        if ($request->id) {
+            $pageid = $request->id;
+        } else {
+            $user_id = Auth::user()->id;
+            $notes = Notes::RelationshipFilter($user_id, '')->first();
+            $pageid = $notes->note_id;
+        }
+        return view('app', ['pageid' => $pageid]);
     }
-    
-    public function getHomeFeed()
-    {
-        $data = [
-            'sidebar' => array(
-                'notes' => array(
-                    1 => array(
-                        'title' => 'Lorem ipsum dolor sit amet',
-                        'caption' => 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.'
-                    ),
-                    2 => array(
-                        'title' => 'Lorem ipsum dolor sit amet',
-                        'caption' => 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.'
-                    ),
-                    3 => array(
-                        'title' => 'Lorem ipsum dolor sit amet',
-                        'caption' => 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.'
-                    ),
-                    4 => array(
-                        'title' => 'Lorem ipsum dolor sit amet',
-                        'caption' => 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.'
-                    ),
-                    5 => array(
-                        'title' => 'Lorem ipsum dolor sit amet',
-                        'caption' => 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.'
-                    ),
-                    6 => array(
-                        'title' => 'Lorem ipsum dolor sit amet',
-                        'caption' => 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.'
-                    ),
-                    7 => array(
-                        'title' => 'Lorem ipsum dolor sit amet',
-                        'caption' => 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.'
-                    ),
-                    8 => array(
-                        'title' => 'Lorem ipsum dolor sit amet',
-                        'caption' => 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.'
-                    ),
 
-
-
-
-
-                )
-            )
-        ];
-        return response()->json($data);
-    }
 }

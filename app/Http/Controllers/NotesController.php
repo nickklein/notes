@@ -25,4 +25,11 @@ class NotesController extends Controller
         $notes = Notes::RelationshipFilter($user_id, $request->search)->get();
         return response()->json($notes);
     }
+    
+    public function getNote(Request $request)
+    {
+        $user_id = Auth::user()->id;
+        $notes = Notes::GetNote($user_id, $request->id)->get();
+        return response()->json($notes);
+    }
 }

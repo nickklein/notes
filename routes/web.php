@@ -17,7 +17,12 @@ Route::get('/', function () {
 
 Auth::routes();
 
-Route::get('/home', 'HomeController@index')->name('home');
+Route::get('/app', 'HomeController@index')->name('home');
+Route::get('/app/{id}', 'HomeController@index')->name('home');
+
 Route::get('/tags/all-tags', 'TagsController@getMyTags');
+
+// Fetch Notes
+Route::get('/note/{id}', 'NotesController@getNote');
 Route::get('/notes/feed/', 'NotesController@getUserNotes')->name('notesFeed');
-Route::get('/notes/feed/{search}', 'NotesController@getUserNotes')->name('notesFeed');
+Route::get('/notes/feed/{search}', 'NotesController@getUserNotes')->name('notesFeedFilter');
