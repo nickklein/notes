@@ -19,8 +19,10 @@
                     <li><a href="#"><img title="Favourite" src="{{url('/')}}/images/icons/pushpin.svg" alt="Favourite"></a></li>
                     <li><a href="#"><img title="Delete" src="{{url('/')}}/images/icons/bin.svg" alt="Delete"></a></li>
                     <li><a href="#"><img title="Encrypt" src="{{url('/')}}/images/icons/lock.svg" alt="Encrypt"></a></li>
+                    <?php /*
                     <li><a href="#"><img title="Remind" src="{{url('/')}}/images/icons/alarm.svg" alt="Remind"></a></li>
                     <li><a href="#"><img title="History" src="{{url('/')}}/images/icons/history.svg" alt="History"></a></li>
+                    */ ?>
                 </ul>
                 <div class="account ol-xl-2 col-md-2">
                     <a href="#" class="pull-right"><img src="{{url('/')}}/images/profile_full.jpg" alt="nick klein"></a>

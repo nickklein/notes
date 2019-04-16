@@ -22,7 +22,7 @@ export default {
     },
     methods: {},
     created() {
-        this.$http.get('/note/' + pageid)
+        this.$http.get('/api/note/' + pageid)
         .then(function(response) {
             this.content = response.data[0].note_content;
         });

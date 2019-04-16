@@ -33,11 +33,11 @@ export default {
 		// }
 	},
 	created: function() {
-        // this.$http.get('tags/all-tags')
-        // .then(function(response) {
-        //     console.log(response.data);
-        //     this.tags = response.data;
-        // });
+			this.$http.get('/api/tag/' + pageid)
+			.then(function(response) {
+					console.log(response);
+					this.tags = response.data.data;
+			});
 	}
 };
 </script>

@@ -3228,7 +3228,6 @@ a:hover {
   display: flex;
   flex-direction: column;
   background: #FCFCFC;
-  border-right: #e6e6e6 1px solid;
 }
 
 .sidebar ul,

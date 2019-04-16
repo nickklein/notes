@@ -21,13 +21,13 @@
             }
         },
         created: function() {
-            this.$http.get('/notes/feed/')
+            this.$http.get('/api/notes/feed/')
             .then(function(response) {
                 this.items = response.data;
             });
 
             bus.$on('filterSidebar', (search) => {
-                this.$http.get('/notes/feed/' + search)
+                this.$http.get('/api/notes/feed/' + search)
                 .then(function(response) {
                     this.items = response.data;
                 });

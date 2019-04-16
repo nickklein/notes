@@ -2197,11 +2197,11 @@ __webpack_require__.r(__webpack_exports__);
     // 	obj.deleteTag();
     // }
   },
-  created: function created() {// this.$http.get('tags/all-tags')
-    // .then(function(response) {
-    //     console.log(response.data);
-    //     this.tags = response.data;
-    // });
+  created: function created() {
+    this.$http.get('/api/tag/' + pageid).then(function (response) {
+      console.log(response);
+      this.tags = response.data.data;
+    });
   }
 });
 
@@ -2239,11 +2239,11 @@ __webpack_require__.r(__webpack_exports__);
   created: function created() {
     var _this = this;
 
-    this.$http.get('/notes/feed/').then(function (response) {
+    this.$http.get('/api/notes/feed/').then(function (response) {
       this.items = response.data;
     });
     _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$on('filterSidebar', function (search) {
-      _this.$http.get('/notes/feed/' + search).then(function (response) {
+      _this.$http.get('/api/notes/feed/' + search).then(function (response) {
         this.items = response.data;
       });
     });
@@ -2309,8 +2309,9 @@ __webpack_require__.r(__webpack_exports__);
     };
   },
   created: function created() {
-    this.$http.get('tags/all-tags').then(function (response) {
-      this.items = response.data;
+    this.$http.get('/api/tags/feed').then(function (response) {
+      console.log(response);
+      this.items = response.data.data;
     });
   }
 });
@@ -2349,7 +2350,7 @@ __webpack_require__.r(__webpack_exports__);
   },
   methods: {},
   created: function created() {
-    this.$http.get('/note/' + pageid).then(function (response) {
+    this.$http.get('/api/note/' + pageid).then(function (response) {
       this.content = response.data[0].note_content;
     });
   }
@@ -37555,7 +37556,7 @@ var render = function() {
       { staticClass: "dropdown-menu scrollable-menu" },
       _vm._l(_vm.items, function(item) {
         return _c("a", { staticClass: "dropdown-item", attrs: { href: "#" } }, [
-          _vm._v(_vm._s(item.tags.tag_name))
+          _vm._v(_vm._s(item.text))
         ])
       }),
       0
