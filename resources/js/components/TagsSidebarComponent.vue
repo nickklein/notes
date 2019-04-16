@@ -4,7 +4,7 @@
                 Tags
             </a>
             <div class="dropdown-menu scrollable-menu">
-                <a class="dropdown-item" href="#" v-for="item in items">{{item.tags.tag_name}}</a>
+                <a class="dropdown-item" href="#" v-for="item in items">{{item.text}}</a>
             </div>
         </div>
 </template>
@@ -18,9 +18,10 @@
             }
         },
         created: function() {
-            this.$http.get('tags/all-tags')
+            this.$http.get('/api/tags/feed')
             .then(function(response) {
-                this.items = response.data;
+                console.log(response);
+                this.items = response.data.data;
             });
         }
 

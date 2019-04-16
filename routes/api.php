@@ -16,3 +16,11 @@ use Illuminate\Http\Request;
 Route::middleware('auth:api')->get('/user', function (Request $request) {
     return $request->user();
 });
+
+Route::get('/tag/{id}', 'api\TagsController@single');
+Route::get('/tags/feed', 'api\TagsController@getMyTags');
+
+// Fetch Notes
+Route::get('/note/{id}', 'NotesController@getNote');
+Route::get('/notes/feed/', 'api\NotesController@getUserNotes')->name('notesFeed');
+Route::get('/notes/feed/{search}', 'api\NotesController@getUserNotes')->name('notesFeedFilter');
