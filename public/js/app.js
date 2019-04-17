@@ -2176,6 +2176,8 @@ __webpack_require__.r(__webpack_exports__);
 //
 //
 //
+//
+//
 
 /* harmony default export */ __webpack_exports__["default"] = ({
   name: 'tags',
@@ -2188,20 +2190,33 @@ __webpack_require__.r(__webpack_exports__);
       tags: []
     };
   },
-  methods: {// addTag(obj) {
-    // 	this.$http.post(site_url + '/api/settings/tags/create', {tagName: obj.tag.text,_token: window.Laravel['csrfToken']});
-    // 	obj.addTag();
-    // },
-    // removeTag(obj) {
-    // 	this.$http.post(site_url + '/api/settings/tags/remove', {tagName: obj.tag.text,_token: window.Laravel['csrfToken']});
-    // 	obj.deleteTag();
-    // }
+  methods: {
+    addTag: function addTag(obj) {
+      console.log(obj);
+      this.$http.post('/api/tags/create', {
+        page_id: pageid,
+        tag_name: obj.tag.text,
+        _token: window.Laravel['csrfToken']
+      });
+      obj.addTag();
+    },
+    removeTag: function removeTag(obj) {
+      this.$http.post('/api/tags/remove', {
+        page_id: pageid,
+        tag_name: obj.tag.text,
+        _token: window.Laravel['csrfToken']
+      });
+      obj.deleteTag();
+    },
+    fetch: function fetch(pageid) {
+      this.$http.get('/api/tag/' + pageid).then(function (response) {
+        console.log(response);
+        this.tags = response.data.data;
+      });
+    }
   },
   created: function created() {
-    this.$http.get('/api/tag/' + pageid).then(function (response) {
-      console.log(response);
-      this.tags = response.data.data;
-    });
+    this.fetch(pageid);
   }
 });
 
@@ -2308,11 +2323,16 @@ __webpack_require__.r(__webpack_exports__);
       items: []
     };
   },
+  methods: {
+    fetch: function fetch() {
+      this.$http.get('/api/tags/feed').then(function (response) {
+        console.log(response);
+        this.items = response.data.data;
+      });
+    }
+  },
   created: function created() {
-    this.$http.get('/api/tags/feed').then(function (response) {
-      console.log(response);
-      this.items = response.data.data;
-    });
+    this.fetch();
   }
 });
 
@@ -37428,6 +37448,10 @@ var render = function() {
     [
       _c("vue-tags-input", {
         attrs: { tags: _vm.tags },
+        on: {
+          "before-adding-tag": _vm.addTag,
+          "before-deleting-tag": _vm.removeTag
+        },
         model: {
           value: _vm.tag,
           callback: function($$v) {
