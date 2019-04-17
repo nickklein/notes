@@ -3,6 +3,8 @@
     <vue-tags-input
       v-model="tag"
       :tags="tags"
+			@before-adding-tag="addTag"
+      @before-deleting-tag="removeTag"
     />
   </div>
 </template>
@@ -22,22 +24,25 @@ export default {
 		};
 	},
 	methods: {
-		// addTag(obj) {
-		// 	this.$http.post(site_url + '/api/settings/tags/create', {tagName: obj.tag.text,_token: window.Laravel['csrfToken']});
-		// 	obj.addTag();
-		// },
-		// removeTag(obj) {
-
-		// 	this.$http.post(site_url + '/api/settings/tags/remove', {tagName: obj.tag.text,_token: window.Laravel['csrfToken']});
-		// 	obj.deleteTag();
-		// }
-	},
-	created: function() {
+		addTag(obj) {
+			console.log(obj);
+			this.$http.post('/api/tags/create', {page_id: pageid, tag_name: obj.tag.text,_token: window.Laravel['csrfToken']});
+			obj.addTag();
+		},
+		removeTag(obj) {
+			this.$http.post('/api/tags/remove', {page_id: pageid, tag_name: obj.tag.text,_token: window.Laravel['csrfToken']});
+			obj.deleteTag();
+		},
+		fetch(pageid) {
 			this.$http.get('/api/tag/' + pageid)
 			.then(function(response) {
 					console.log(response);
 					this.tags = response.data.data;
 			});
+		}
+	},
+	created: function() {
+			this.fetch(pageid);
 	}
 };
 </script>

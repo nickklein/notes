@@ -4,6 +4,7 @@ namespace notes\Http\Controllers\api;
 
 use Illuminate\Http\Request;
 use notes\Http\Controllers\Controller;
+use notes\Models\Tags;
 use notes\Models\TagsRel;
 use notes\Http\Resources\initTags as initTags;
 use Auth;
@@ -49,9 +50,38 @@ class TagsController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
-    public function create()
+    public function create(Request $request)
     {
-        //
+        //$request->tagName
+         $id = Auth::user()->id;
+
+        // Check to make sure request wasn't empty
+        if (!empty($request->tag_name)) {
+            $tag = Tags::checkTags($request->tag_name)->first();
+
+            if (empty($tag)) {
+                // If Tag needs to be added to the Database
+                $tags = new Tags;
+                $tags->tag_name = $request->tag_name;
+                $tags->save();
+                $tagID = $tags->tag_id;
+            } else {
+                // If Tag is already saved in the Database
+                $tagID = $tag->tag_id;
+            }
+         
+            // Add tagID and user to table
+            $rel = new TagsRel;
+            $rel->tag_id = $tagID;
+            $rel->note_id = $request->page_id;
+            $rel->user_id = $id;
+
+            if ($rel->save()) {
+                ##return new responseTags($rel);
+            }
+        }
+
+
     }
 
     /**
@@ -108,5 +138,6 @@ class TagsController extends Controller
     public function destroy($id)
     {
         //
+        dd($id);
     }
 }

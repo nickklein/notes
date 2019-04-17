@@ -18,6 +18,8 @@ Route::middleware('auth:api')->get('/user', function (Request $request) {
 });
 
 Route::get('/tag/{id}', 'api\TagsController@single');
+Route::post('/tags/remove', 'api\TagsController@remove');
+Route::post('/tags/create', 'api\TagsController@create');
 Route::get('/tags/feed', 'api\TagsController@getMyTags');
 
 // Fetch Notes
