@@ -12,7 +12,6 @@
         methods: {
             signalChange: function(test) {
                 bus.$emit('filterSidebar', test.originalTarget.value);
-                //console.log(test.originalTarget.value);
             }
         }
 

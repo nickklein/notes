@@ -21,7 +21,6 @@
             fetch: function() {
                 this.$http.get('/api/tags/feed')
                 .then(function(response) {
-                    console.log(response);
                     this.items = response.data.data;
                 });
             }

@@ -7,6 +7,7 @@ use notes\Http\Controllers\Controller;
 use notes\Models\Tags;
 use notes\Models\TagsRel;
 use notes\Http\Resources\initTags as initTags;
+use notes\Http\Resources\responseTags;
 use Auth;
 
 
@@ -77,7 +78,7 @@ class TagsController extends Controller
             $rel->user_id = $id;
 
             if ($rel->save()) {
-                ##return new responseTags($rel);
+                return new responseTags($rel);
             }
         }
 
@@ -135,9 +136,18 @@ class TagsController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function destroy($id)
+    public function destroy(Request $request)
     {
         //
-        dd($id);
+        $id = Auth::user()->id;
+        if (!empty($request->tag_name)) {
+            $tag = Tags::checkTags($request->tag_name)->first();
+            if (!empty($tag)) {
+                $rel = TagsRel::where('tag_id', '=', $tag->tag_id)->where('user_id', '=', $id)->first();
+                if ($rel->delete()) {
+                    return new responseTags($rel);
+                }
+            }
+        }
     }
 }

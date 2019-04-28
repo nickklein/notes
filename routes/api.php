@@ -18,11 +18,15 @@ Route::middleware('auth:api')->get('/user', function (Request $request) {
 });
 
 Route::get('/tag/{id}', 'api\TagsController@single');
-Route::post('/tags/remove', 'api\TagsController@remove');
+Route::post('/tags/remove', 'api\TagsController@destroy');
 Route::post('/tags/create', 'api\TagsController@create');
 Route::get('/tags/feed', 'api\TagsController@getMyTags');
 
 // Fetch Notes
-Route::get('/note/{id}', 'NotesController@getNote');
+Route::get('/note/{id}', 'api\NotesController@getNote');
 Route::get('/notes/feed/', 'api\NotesController@getUserNotes')->name('notesFeed');
 Route::get('/notes/feed/{search}', 'api\NotesController@getUserNotes')->name('notesFeedFilter');
+
+Route::post('/notes/create', 'api\NotesController@create');
+Route::post('/notes/remove', 'api\NotesController@remove');
+Route::post('/notes/update', 'api\NotesController@update');

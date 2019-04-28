@@ -29,6 +29,7 @@ Vue.component('search-sidebar', require('./components/SearchComponent.vue').defa
 Vue.component('notes-sidebar', require('./components/NotesSidebarComponent.vue').default);
 Vue.component('tags-sidebar', require('./components/TagsSidebarComponent.vue').default);
 Vue.component('tags', require('./components/MainTagsComponent.vue').default);
+Vue.component('notes-title', require('./components/MainTitleComponent.vue').default);
 Vue.component('tinymce', require('./components/tinyMCEComponent.vue').default);
 
 /**
