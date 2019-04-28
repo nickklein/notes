@@ -3325,3 +3325,10 @@ a:hover {
   border-radius: 50%;
 }
 
+.title {
+  width: 100%;
+  border: none;
+  font-size: 1.8em;
+  color: #298DD6;
+}
+

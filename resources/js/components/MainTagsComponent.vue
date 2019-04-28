@@ -11,6 +11,8 @@
 
 <script>
 import VueTagsInput from '@johmun/vue-tags-input';
+import {bus} from '../app';
+
 
 export default {
 	name: 'tags',
@@ -25,7 +27,6 @@ export default {
 	},
 	methods: {
 		addTag(obj) {
-			console.log(obj);
 			this.$http.post('/api/tags/create', {page_id: pageid, tag_name: obj.tag.text,_token: window.Laravel['csrfToken']});
 			obj.addTag();
 		},
@@ -36,13 +37,17 @@ export default {
 		fetch(pageid) {
 			this.$http.get('/api/tag/' + pageid)
 			.then(function(response) {
-					console.log(response);
 					this.tags = response.data.data;
 			});
 		}
 	},
 	created: function() {
 			this.fetch(pageid);
+
+			bus.$on('updateComponents', (newid) => {
+					this.fetch(newid);
+			});
+
 	}
 };
 </script>

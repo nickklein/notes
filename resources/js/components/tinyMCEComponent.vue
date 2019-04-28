@@ -9,6 +9,8 @@
 
 <script>
 import Editor from '@tinymce/tinymce-vue';
+import {bus} from '../app';
+
 
 export default {
 	name: 'tinymce',
@@ -20,12 +22,23 @@ export default {
             content: 'Type here'
         }
     },
-    methods: {},
+    methods: {
+        fetch: function(pageid) {
+            this.$http.get('/api/note/' + pageid)
+            .then(function(response) {
+                this.content = response.data[0].note_content;
+            });
+        }
+    },
     created() {
-        this.$http.get('/api/note/' + pageid)
-        .then(function(response) {
-            this.content = response.data[0].note_content;
+        this.fetch(pageid);
+
+        bus.$on('updateComponents', (newid) => {
+            this.fetch(newid);
         });
+    },
+    updated() {
+        console.log('updated');
     }
 };
 </script>

@@ -33,6 +33,7 @@
         </div>
         <div class="notes-container">
                 <div class="content">
+                    <notes-title></notes-title>
                     <tinymce></tinymce>
                 </div>
         </div>
