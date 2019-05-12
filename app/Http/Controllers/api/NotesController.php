@@ -5,6 +5,8 @@ namespace notes\Http\Controllers\api;
 use Illuminate\Http\Request;
 use notes\Http\Controllers\Controller;
 use notes\Models\Notes;
+use notes\Models\NotesRel;
+use notes\Src\NotesHelper;
 use Auth;
 
 class NotesController extends Controller
@@ -48,6 +50,20 @@ class NotesController extends Controller
     public function create()
     {
         //
+        $user_id = Auth::user()->id;
+
+        $note = new Notes;
+        $note->note_title = 'Title your note';
+        $note->note_content = '<h1><span style="color: #3598db;">Title your note</span></h1><p>Here\'s your paragraph</p>';
+        $note->note_caption = 'Here\'s your paragraph';
+        if ($note->save()) {
+            $note_rel = new NotesRel;
+            $note_rel->note_id = $note->note_id;
+            $note_rel->user_id = $user_id;
+            $note_rel->permission = 'admin';
+            $note_rel->order = 0;
+            $note_rel->save();
+        }
     }
 
     /**
@@ -90,19 +106,33 @@ class NotesController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function update(Request $request, $id)
+    public function update(Request $request)
     {
-        //
+        $user_id = Auth::user()->id;
+        $note = Notes::NotesRel()
+                    ->where([
+                        ['notes_rel.note_id','=',$request->page_id],
+                        ['notes_rel.user_id','=', $user_id]
+                    ])
+                    ->first();
+
+        $notes_helper = (new NotesHelper)->processContent($request);
+        $note->note_title = $notes_helper['title'];
+        $note->note_content = $notes_helper['content'];
+        $note->note_caption = $notes_helper['caption'];
+        $note->save();
     }
 
     /**
      * Remove the specified resource from storage.
      *
-     * @param  int  $id
+     * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
-    public function destroy($id)
+    public function destroy(Request $request)
     {
         //
+        $note = Notes::find($request->page_id);
+        $note->delete();
     }
 }

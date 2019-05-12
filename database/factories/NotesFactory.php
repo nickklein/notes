@@ -8,7 +8,7 @@ $factory->define(Notes::class, function (Faker $faker) {
         //
         'note_title' => substr($faker->text, 0, 30),
         'note_content' => $faker->text,
-        'published' => 0,
-        'order' => 0
+        'note_caption' => $faker->text,
+        'published' => 0
     ];
 });

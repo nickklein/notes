@@ -1,6 +1,6 @@
 #app {
     height: 100%;
-    .container-fluid, .container-fluid .container-row, .sidebar-container, .sidebar {
+    .container-fluid, .container-fluid .container-row, .sidebar-container, .sidebar, .notes-container, .notes-container .content, .notes-container .editor {
         height: 100%;
     }
 }
@@ -23,12 +23,12 @@
 }
 
 .sidebar {
-    
-    display: flex;
-    flex-direction: column;
+    @include media-breakpoint-up(sm) {
+        display: flex;
+        flex-direction: column;
+    }
 
     background: $sidebar-bg;
-//    border-right: #e6e6e6 1px solid;
     
     ul, li {
         padding: 0;
@@ -56,6 +56,9 @@
             width: 100%;
             margin-bottom: 10px;
         }
+        .dropdown-toggle {
+            cursor:pointer;
+        }
     }
     .notes-container {
         overflow: auto;
@@ -76,7 +79,7 @@
                 margin-bottom: 0;
                 line-height: 1.1em;
             }
-            &:hover {
+            &:hover, &.active {
                 h5, p.caption {
                     color: #fff;
                 }
@@ -108,7 +111,9 @@
         }
     }
     .account {
-        a {
+        #navbarDropdown {
+            float: right;
+            margin: 3px 35px;
             width: 50px;
             height: 50px;
             display: block;
@@ -121,9 +126,30 @@
     }
 }
 
-.title {
-    width: 100%;
-    border: none;
-    font-size: 1.8em;
-    color: #298DD6;
+/* Tags */
+.tags {
+    .ti-tag {
+        background-color: #298DD6  !important;
+    }
+    .ti-input {
+        border: none !important;
+    }
+}
+
+.notes-container {
+    .title {
+        width: 100%;
+        border: none;
+        font-size: 1.8em;
+        color: #298DD6;
+        resize: none;
+    }
+    .tox-tinymce {
+        border: none;
+        font-family: "Roboto", sans-serif;
+        height: 90% !important;
+        .tox-edit-area {
+            border-top: none;
+        }
+    }
 }

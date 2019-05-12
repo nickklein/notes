@@ -10,12 +10,11 @@ class Notes extends Model
     //
     protected $table = 'notes';
     protected $primaryKey = 'note_id';
-    public $timestamps = false;
 
-    public function notes_rel()
+    public function scopeNotesRel(Builder $query)
     {
         //return $this->belongsTo('\notes\Models\NotesRel', 'note_id', 'note_id');
-        return $this->join('\notes\Models\NotesRel', 'note_id', 'note_id');
+        return $query->join('notes_rel', 'notes_rel.note_id', 'notes.note_id');
     }
 
     public function scopeRelationshipFilter(Builder $query, $user_id, $search) 
@@ -28,7 +27,8 @@ class Notes extends Model
                             $query->where('notes.note_title', 'like', '%' . $search . '%')
                                 ->orWhere('notes.note_content', 'like', '%' . $search . '%');
                         });
-                });
+                })
+                ->orderby('notes.updated_at', 'DESC');
     }
     public function scopeGetNote(Builder $query, $user_id, $note_id)
     {

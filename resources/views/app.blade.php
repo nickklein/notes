@@ -2,40 +2,50 @@
 
 @section('content')
 
-<a href="#" id="add-more">+</a>
+<create-note></create-note>
 <div class="container-fluid">
     <div class="container-row row">
-    <aside class="sidebar-container ol-xl-2 col-md-2">
+    <aside class="sidebar-container col-xl-2 col-lg-3 col-md-4 col-sm-4">
         <div class="sidebar">
                 <search-sidebar></search-sidebar>
                 <notes-sidebar></notes-sidebar>
         </div>
-
     </aside>
-    <main class="ol-xl-10 col-md-10">
+    <main class="col-xl-10 col-lg-9 col-md-8 col-sm-8">
         <header class="toolbar row">
-                <ul class="left-tools ol-xl-10 col-md-10">
-                    <li><a href="#"><img title="Info" src="{{url('/')}}/images/icons/info.svg" alt="info"></a></li>
-                    <li><a href="#"><img title="Favourite" src="{{url('/')}}/images/icons/pushpin.svg" alt="Favourite"></a></li>
-                    <li><a href="#"><img title="Delete" src="{{url('/')}}/images/icons/bin.svg" alt="Delete"></a></li>
-                    <li><a href="#"><img title="Encrypt" src="{{url('/')}}/images/icons/lock.svg" alt="Encrypt"></a></li>
-                    <?php /*
-                    <li><a href="#"><img title="Remind" src="{{url('/')}}/images/icons/alarm.svg" alt="Remind"></a></li>
-                    <li><a href="#"><img title="History" src="{{url('/')}}/images/icons/history.svg" alt="History"></a></li>
-                    */ ?>
-                </ul>
-                <div class="account ol-xl-2 col-md-2">
-                    <a href="#" class="pull-right"><img src="{{url('/')}}/images/profile_full.jpg" alt="nick klein"></a>
+            <toolbar></toolbar>
+
+            <div class="account col-xl-2 col-md-2 col-sm-4">
+                <div class="nav-item dropdown">
+                    <a id="navbarDropdown" class="nav-link dropdown-toggle" href="#" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" v-pre>
+                        <img src="/images/profile_full.jpg" alt="nick klein"> <span class="caret"></span>
+                    </a>
+
+                    <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdown">
+                        <a class="dropdown-item" href="">
+                            Settings
+                        </a>
+                        <a class="dropdown-item" href="{{ route('logout') }}"
+                            onclick="event.preventDefault();
+                                            document.getElementById('logout-form').submit();">
+                            {{ __('Logout') }}
+                        </a>
+
+                        <form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;">
+                            @csrf
+                        </form>
+                    </div>
                 </div>
+            </div>
         </header>
+
         <div class="tags">
             <tags></tags>
         </div>
         <div class="notes-container">
-                <div class="content">
-                    <notes-title></notes-title>
-                    <tinymce></tinymce>
-                </div>
+            <div class="content">
+                <tinymce></tinymce>
+            </div>
         </div>
     </main>
     </div>

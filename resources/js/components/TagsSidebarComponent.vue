@@ -10,6 +10,9 @@
 </template>
 
 <script>
+    import {bus} from '../app';
+
+
     export default {
         name: 'tags-sidebar',
         data() {
@@ -21,12 +24,18 @@
             fetch: function() {
                 this.$http.get('/api/tags/feed')
                 .then(function(response) {
+                    console.log(response.data.data);
                     this.items = response.data.data;
                 });
             }
         },
         created: function() {
             this.fetch();
+
+			bus.$on('updateTagsSidebar', () => {
+                console.log('updateTagsSidebar');
+				this.fetch();
+			});
         }
 
     }

@@ -1,9 +1,9 @@
 <template>
         <ul class="notes-container">
-            <li class="note" v-for="(item, index) in items">
-                <a href="#" v-on:click="changeNote" :note_id="item.note_id">
+            <li class="note" v-for="(item, index) in items" :key="index">
+                <a href="#" v-on:click="changeNote" :class="{active:item.note_id == selected}" :note_id="item.note_id">
                     <h5>{{item.note_title}}</h5>
-                    <p class="caption">{{item.note_content}}</p>
+                    <p class="caption">{{item.note_caption}}</p>
                 </a>
             </li>
         </ul>
@@ -18,6 +18,7 @@
         data() {
             return {
                 items: [],
+                selected: 0
             }
         },
         methods: {
@@ -28,12 +29,15 @@
                 });
             },
             changeNote: function(event) {
-                var newid = event.currentTarget.getAttribute('note_id');
-                pageid = newid;
+                var note_id = event.currentTarget.getAttribute('note_id');
 
-                history.pushState(null, '', '/app#' + newid);
+                pageid = note_id;
 
-                bus.$emit('updateComponents', newid);
+                history.pushState(null, '', '/app#' + note_id);
+
+                bus.$emit('updateComponents', note_id);
+
+                this.selected = note_id;
             }
         },
         created: function() {

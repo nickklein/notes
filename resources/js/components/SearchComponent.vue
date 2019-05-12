@@ -1,6 +1,6 @@
 <template>
         <header class="search">
-                <input type="text" name="search" id="search" v-on:change="signalChange"/>
+                <input type="text" name="search" id="search" v-on:keyup="signalChange"/>
                 <tags-sidebar></tags-sidebar>
         </header>
 </template>
@@ -11,7 +11,10 @@
         name: 'search-sidebar',
         methods: {
             signalChange: function(test) {
-                bus.$emit('filterSidebar', test.originalTarget.value);
+                // Reduce the amount of requests to the server a little bit, without hopefully effecting UX
+                if (test.originalTarget.value.length > 2 || test.originalTarget.value.length == 0) {
+                    bus.$emit('filterSidebar', test.originalTarget.value);
+                }
             }
         }
 
