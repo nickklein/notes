@@ -2210,7 +2210,7 @@ __webpack_require__.r(__webpack_exports__);
 
 
 /* harmony default export */ __webpack_exports__["default"] = ({
-  name: 'tags',
+  name: 'notes-tags',
   components: {
     VueTagsInput: _johmun_vue_tags_input__WEBPACK_IMPORTED_MODULE_0___default.a
   },
@@ -2284,7 +2284,7 @@ __webpack_require__.r(__webpack_exports__);
   data: function data() {
     return {
       items: [],
-      selected: 0
+      selected: pageid
     };
   },
   methods: {
@@ -2300,6 +2300,12 @@ __webpack_require__.r(__webpack_exports__);
       history.pushState(null, '', '/app#' + note_id);
       _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$emit('updateComponents', note_id);
       this.selected = note_id;
+      var sidebarContainer = document.querySelector('.sidebar-container');
+      var mainWrap = document.querySelector('.main-wrap');
+      sidebarContainer.classList.remove('slideInSidebar');
+      sidebarContainer.classList.add('slideOutSidebar');
+      mainWrap.classList.remove('slideOutMain');
+      mainWrap.classList.add('slideInMain');
     }
   },
   created: function created() {
@@ -2417,16 +2423,48 @@ __webpack_require__.r(__webpack_exports__);
 //
 //
 //
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
 
 /* harmony default export */ __webpack_exports__["default"] = ({
-  name: 'toolbar',
+  name: 'notes-toolbar',
   methods: {
-    deleteNote: function deleteNote() {
+    pin: function pin() {
+      this.$http.post('/api/notes/pin', {
+        page_id: pageid,
+        _token: window.Laravel['csrfToken']
+      });
+    },
+    remove: function remove() {
       this.$http.post('/api/notes/remove', {
         page_id: pageid,
         _token: window.Laravel['csrfToken']
       });
       _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$emit('filterSidebar', '');
+    },
+    back: function back() {
+      var sidebarContainer = document.querySelector('.sidebar-container');
+      var mainWrap = document.querySelector('.main-wrap');
+      sidebarContainer.classList.remove('slideOutSidebar');
+      sidebarContainer.classList.add('slideInSidebar');
+      mainWrap.classList.remove('slideInMain');
+      mainWrap.classList.add('slideOutMain');
     }
   }
 });
@@ -2460,10 +2498,14 @@ __webpack_require__.r(__webpack_exports__);
 //
 //
 //
+//
+//
+//
+//
 
 
 /* harmony default export */ __webpack_exports__["default"] = ({
-  name: 'tinymce',
+  name: 'notes-tinymce',
   components: {
     Editor: _tinymce_tinymce_vue__WEBPACK_IMPORTED_MODULE_0__["default"]
   },
@@ -37623,10 +37665,10 @@ render._withStripped = true
 
 /***/ }),
 
-/***/ "./node_modules/vue-loader/lib/loaders/templateLoader.js?!./node_modules/vue-loader/lib/index.js?!./resources/js/components/NotesSidebarComponent.vue?vue&type=template&id=ab0bb0f2&":
-/*!************************************************************************************************************************************************************************************************************************!*\
-  !*** ./node_modules/vue-loader/lib/loaders/templateLoader.js??vue-loader-options!./node_modules/vue-loader/lib??vue-loader-options!./resources/js/components/NotesSidebarComponent.vue?vue&type=template&id=ab0bb0f2& ***!
-  \************************************************************************************************************************************************************************************************************************/
+/***/ "./node_modules/vue-loader/lib/loaders/templateLoader.js?!./node_modules/vue-loader/lib/index.js?!./resources/js/components/NotesSidebarComponent.vue?vue&type=template&id=ab0bb0f2&scoped=true&":
+/*!************************************************************************************************************************************************************************************************************************************!*\
+  !*** ./node_modules/vue-loader/lib/loaders/templateLoader.js??vue-loader-options!./node_modules/vue-loader/lib??vue-loader-options!./resources/js/components/NotesSidebarComponent.vue?vue&type=template&id=ab0bb0f2&scoped=true& ***!
+  \************************************************************************************************************************************************************************************************************************************/
 /*! exports provided: render, staticRenderFns */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
@@ -37769,24 +37811,54 @@ var render = function() {
   var _vm = this
   var _h = _vm.$createElement
   var _c = _vm._self._c || _h
-  return _c("ul", { staticClass: "left-tools col-xl-10 col-md-10 col-sm-8" }, [
-    _vm._m(0),
-    _vm._v(" "),
-    _vm._m(1),
-    _vm._v(" "),
-    _c("li", [
-      _c("a", { attrs: { href: "#" }, on: { click: _vm.deleteNote } }, [
-        _c("img", {
-          attrs: {
-            title: "Delete",
-            src: "/images/icons/bin.svg",
-            alt: "Delete"
-          }
-        })
-      ])
+  return _c("div", { staticClass: "col-xl-10 col-md-10 col-sm-8" }, [
+    _c("div", { staticClass: "mobile-menu row" }, [
+      _c("ul", { staticClass: "back-menu" }, [
+        _c("li", [
+          _c("a", { attrs: { href: "#" }, on: { click: _vm.back } }, [
+            _c("img", {
+              attrs: {
+                title: "Favourite",
+                src: "/images/icons/left-arrow.svg",
+                alt: "Go back"
+              }
+            })
+          ])
+        ])
+      ]),
+      _vm._v(" "),
+      _vm._m(0)
     ]),
     _vm._v(" "),
-    _vm._m(2)
+    _c("ul", { staticClass: "left-tools col-xl-10 col-md-10 " }, [
+      _vm._m(1),
+      _vm._v(" "),
+      _c("li", [
+        _c("a", { attrs: { href: "#" }, on: { click: _vm.pin } }, [
+          _c("img", {
+            attrs: {
+              title: "Favourite",
+              src: "/images/icons/pushpin.svg",
+              alt: "Favourite"
+            }
+          })
+        ])
+      ]),
+      _vm._v(" "),
+      _c("li", [
+        _c("a", { attrs: { href: "#" }, on: { click: _vm.remove } }, [
+          _c("img", {
+            attrs: {
+              title: "Delete",
+              src: "/images/icons/bin.svg",
+              alt: "Delete"
+            }
+          })
+        ])
+      ]),
+      _vm._v(" "),
+      _vm._m(2)
+    ])
   ])
 }
 var staticRenderFns = [
@@ -37794,11 +37866,40 @@ var staticRenderFns = [
     var _vm = this
     var _h = _vm.$createElement
     var _c = _vm._self._c || _h
-    return _c("li", [
-      _c("a", { attrs: { href: "#" } }, [
-        _c("img", {
-          attrs: { title: "Info", src: "/images/icons/info.svg", alt: "info" }
-        })
+    return _c("div", { staticClass: "right-tools btn-group" }, [
+      _c(
+        "a",
+        {
+          staticClass: "dropdown-toggle",
+          attrs: {
+            "data-toggle": "dropdown",
+            "aria-haspopup": "true",
+            "aria-expanded": "false"
+          }
+        },
+        [
+          _c("img", {
+            attrs: { title: "Info", src: "/images/icons/menu.svg", alt: "info" }
+          })
+        ]
+      ),
+      _vm._v(" "),
+      _c("div", { staticClass: "dropdown-menu scrollable-menu" }, [
+        _c("a", { staticClass: "dropdown-item", attrs: { href: "#" } }, [
+          _vm._v("Info")
+        ]),
+        _vm._v(" "),
+        _c("a", { staticClass: "dropdown-item", attrs: { href: "#" } }, [
+          _vm._v("Favourite")
+        ]),
+        _vm._v(" "),
+        _c("a", { staticClass: "dropdown-item", attrs: { href: "#" } }, [
+          _vm._v("Delete")
+        ]),
+        _vm._v(" "),
+        _c("a", { staticClass: "dropdown-item", attrs: { href: "#" } }, [
+          _vm._v("Encrypt")
+        ])
       ])
     ])
   },
@@ -37809,11 +37910,7 @@ var staticRenderFns = [
     return _c("li", [
       _c("a", { attrs: { href: "#" } }, [
         _c("img", {
-          attrs: {
-            title: "Favourite",
-            src: "/images/icons/pushpin.svg",
-            alt: "Favourite"
-          }
+          attrs: { title: "Info", src: "/images/icons/info.svg", alt: "info" }
         })
       ])
     ])
@@ -37869,6 +37966,10 @@ var render = function() {
               branding: false,
               height: "500px",
               menubar: false,
+              mobile: {
+                theme: "silver"
+              },
+
               toolbar:
                 "formatselect | bold italic strikethrough forecolor permanentpen formatpainter | link image | alignleft aligncenter alignright alignjustify  | numlist bullist | removeformat | addcomment",
               plugins:
@@ -51643,10 +51744,10 @@ var bus = new vue__WEBPACK_IMPORTED_MODULE_0___default.a();
 vue__WEBPACK_IMPORTED_MODULE_0___default.a.component('search-sidebar', __webpack_require__(/*! ./components/SearchComponent.vue */ "./resources/js/components/SearchComponent.vue").default);
 vue__WEBPACK_IMPORTED_MODULE_0___default.a.component('notes-sidebar', __webpack_require__(/*! ./components/NotesSidebarComponent.vue */ "./resources/js/components/NotesSidebarComponent.vue").default);
 vue__WEBPACK_IMPORTED_MODULE_0___default.a.component('tags-sidebar', __webpack_require__(/*! ./components/TagsSidebarComponent.vue */ "./resources/js/components/TagsSidebarComponent.vue").default);
-vue__WEBPACK_IMPORTED_MODULE_0___default.a.component('tags', __webpack_require__(/*! ./components/MainTagsComponent.vue */ "./resources/js/components/MainTagsComponent.vue").default);
+vue__WEBPACK_IMPORTED_MODULE_0___default.a.component('notes-tags', __webpack_require__(/*! ./components/MainTagsComponent.vue */ "./resources/js/components/MainTagsComponent.vue").default);
 vue__WEBPACK_IMPORTED_MODULE_0___default.a.component('create-note', __webpack_require__(/*! ./components/CreateNoteComponent.vue */ "./resources/js/components/CreateNoteComponent.vue").default);
-vue__WEBPACK_IMPORTED_MODULE_0___default.a.component('toolbar', __webpack_require__(/*! ./components/ToolbarComponent.vue */ "./resources/js/components/ToolbarComponent.vue").default);
-vue__WEBPACK_IMPORTED_MODULE_0___default.a.component('tinymce', __webpack_require__(/*! ./components/tinyMCEComponent.vue */ "./resources/js/components/tinyMCEComponent.vue").default);
+vue__WEBPACK_IMPORTED_MODULE_0___default.a.component('notes-toolbar', __webpack_require__(/*! ./components/ToolbarComponent.vue */ "./resources/js/components/ToolbarComponent.vue").default);
+vue__WEBPACK_IMPORTED_MODULE_0___default.a.component('notes-tinymce', __webpack_require__(/*! ./components/tinyMCEComponent.vue */ "./resources/js/components/tinyMCEComponent.vue").default);
 /**
  * Next, we will create a fresh Vue application instance and attach it to
  * the page. Then, you may begin adding components to this application
@@ -51869,7 +51970,7 @@ __webpack_require__.r(__webpack_exports__);
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-/* harmony import */ var _NotesSidebarComponent_vue_vue_type_template_id_ab0bb0f2___WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./NotesSidebarComponent.vue?vue&type=template&id=ab0bb0f2& */ "./resources/js/components/NotesSidebarComponent.vue?vue&type=template&id=ab0bb0f2&");
+/* harmony import */ var _NotesSidebarComponent_vue_vue_type_template_id_ab0bb0f2_scoped_true___WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./NotesSidebarComponent.vue?vue&type=template&id=ab0bb0f2&scoped=true& */ "./resources/js/components/NotesSidebarComponent.vue?vue&type=template&id=ab0bb0f2&scoped=true&");
 /* harmony import */ var _NotesSidebarComponent_vue_vue_type_script_lang_js___WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./NotesSidebarComponent.vue?vue&type=script&lang=js& */ "./resources/js/components/NotesSidebarComponent.vue?vue&type=script&lang=js&");
 /* empty/unused harmony star reexport *//* harmony import */ var _node_modules_vue_loader_lib_runtime_componentNormalizer_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../node_modules/vue-loader/lib/runtime/componentNormalizer.js */ "./node_modules/vue-loader/lib/runtime/componentNormalizer.js");
 
@@ -51881,11 +51982,11 @@ __webpack_require__.r(__webpack_exports__);
 
 var component = Object(_node_modules_vue_loader_lib_runtime_componentNormalizer_js__WEBPACK_IMPORTED_MODULE_2__["default"])(
   _NotesSidebarComponent_vue_vue_type_script_lang_js___WEBPACK_IMPORTED_MODULE_1__["default"],
-  _NotesSidebarComponent_vue_vue_type_template_id_ab0bb0f2___WEBPACK_IMPORTED_MODULE_0__["render"],
-  _NotesSidebarComponent_vue_vue_type_template_id_ab0bb0f2___WEBPACK_IMPORTED_MODULE_0__["staticRenderFns"],
+  _NotesSidebarComponent_vue_vue_type_template_id_ab0bb0f2_scoped_true___WEBPACK_IMPORTED_MODULE_0__["render"],
+  _NotesSidebarComponent_vue_vue_type_template_id_ab0bb0f2_scoped_true___WEBPACK_IMPORTED_MODULE_0__["staticRenderFns"],
   false,
   null,
-  null,
+  "ab0bb0f2",
   null
   
 )
@@ -51911,19 +52012,19 @@ __webpack_require__.r(__webpack_exports__);
 
 /***/ }),
 
-/***/ "./resources/js/components/NotesSidebarComponent.vue?vue&type=template&id=ab0bb0f2&":
-/*!******************************************************************************************!*\
-  !*** ./resources/js/components/NotesSidebarComponent.vue?vue&type=template&id=ab0bb0f2& ***!
-  \******************************************************************************************/
+/***/ "./resources/js/components/NotesSidebarComponent.vue?vue&type=template&id=ab0bb0f2&scoped=true&":
+/*!******************************************************************************************************!*\
+  !*** ./resources/js/components/NotesSidebarComponent.vue?vue&type=template&id=ab0bb0f2&scoped=true& ***!
+  \******************************************************************************************************/
 /*! exports provided: render, staticRenderFns */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-/* harmony import */ var _node_modules_vue_loader_lib_loaders_templateLoader_js_vue_loader_options_node_modules_vue_loader_lib_index_js_vue_loader_options_NotesSidebarComponent_vue_vue_type_template_id_ab0bb0f2___WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! -!../../../node_modules/vue-loader/lib/loaders/templateLoader.js??vue-loader-options!../../../node_modules/vue-loader/lib??vue-loader-options!./NotesSidebarComponent.vue?vue&type=template&id=ab0bb0f2& */ "./node_modules/vue-loader/lib/loaders/templateLoader.js?!./node_modules/vue-loader/lib/index.js?!./resources/js/components/NotesSidebarComponent.vue?vue&type=template&id=ab0bb0f2&");
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "render", function() { return _node_modules_vue_loader_lib_loaders_templateLoader_js_vue_loader_options_node_modules_vue_loader_lib_index_js_vue_loader_options_NotesSidebarComponent_vue_vue_type_template_id_ab0bb0f2___WEBPACK_IMPORTED_MODULE_0__["render"]; });
+/* harmony import */ var _node_modules_vue_loader_lib_loaders_templateLoader_js_vue_loader_options_node_modules_vue_loader_lib_index_js_vue_loader_options_NotesSidebarComponent_vue_vue_type_template_id_ab0bb0f2_scoped_true___WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! -!../../../node_modules/vue-loader/lib/loaders/templateLoader.js??vue-loader-options!../../../node_modules/vue-loader/lib??vue-loader-options!./NotesSidebarComponent.vue?vue&type=template&id=ab0bb0f2&scoped=true& */ "./node_modules/vue-loader/lib/loaders/templateLoader.js?!./node_modules/vue-loader/lib/index.js?!./resources/js/components/NotesSidebarComponent.vue?vue&type=template&id=ab0bb0f2&scoped=true&");
+/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "render", function() { return _node_modules_vue_loader_lib_loaders_templateLoader_js_vue_loader_options_node_modules_vue_loader_lib_index_js_vue_loader_options_NotesSidebarComponent_vue_vue_type_template_id_ab0bb0f2_scoped_true___WEBPACK_IMPORTED_MODULE_0__["render"]; });
 
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "staticRenderFns", function() { return _node_modules_vue_loader_lib_loaders_templateLoader_js_vue_loader_options_node_modules_vue_loader_lib_index_js_vue_loader_options_NotesSidebarComponent_vue_vue_type_template_id_ab0bb0f2___WEBPACK_IMPORTED_MODULE_0__["staticRenderFns"]; });
+/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "staticRenderFns", function() { return _node_modules_vue_loader_lib_loaders_templateLoader_js_vue_loader_options_node_modules_vue_loader_lib_index_js_vue_loader_options_NotesSidebarComponent_vue_vue_type_template_id_ab0bb0f2_scoped_true___WEBPACK_IMPORTED_MODULE_0__["staticRenderFns"]; });
 
 
 

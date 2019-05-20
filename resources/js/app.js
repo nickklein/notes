@@ -28,10 +28,10 @@ export const bus = new Vue();
 Vue.component('search-sidebar', require('./components/SearchComponent.vue').default);
 Vue.component('notes-sidebar', require('./components/NotesSidebarComponent.vue').default);
 Vue.component('tags-sidebar', require('./components/TagsSidebarComponent.vue').default);
-Vue.component('tags', require('./components/MainTagsComponent.vue').default);
+Vue.component('notes-tags', require('./components/MainTagsComponent.vue').default);
 Vue.component('create-note', require('./components/CreateNoteComponent.vue').default);
-Vue.component('toolbar', require('./components/ToolbarComponent.vue').default);
-Vue.component('tinymce', require('./components/tinyMCEComponent.vue').default);
+Vue.component('notes-toolbar', require('./components/ToolbarComponent.vue').default);
+Vue.component('notes-tinymce', require('./components/tinyMCEComponent.vue').default);
 
 /**
  * Next, we will create a fresh Vue application instance and attach it to

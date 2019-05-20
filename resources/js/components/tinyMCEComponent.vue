@@ -7,7 +7,11 @@
         :init="{
         branding: false, 
         height: '500px', 
-        menubar: false, 
+        menubar: false,
+        mobile: {
+            theme: 'silver'
+        },
+
         toolbar: 'formatselect | bold italic strikethrough forecolor permanentpen formatpainter | link image | alignleft aligncenter alignright alignjustify  | numlist bullist | removeformat | addcomment', 
         plugins: 'advlist autolink lists link image charmap print preview anchor textcolor searchreplace visualblocks code fullscreen insertdatetime media table paste code help'}">
          This is a paragraph
@@ -22,7 +26,7 @@ import {bus} from '../app';
 
 
 export default {
-	name: 'tinymce',
+	name: 'notes-tinymce',
 	components: {
 		Editor
     },

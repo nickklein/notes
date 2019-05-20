@@ -1,19 +1,21 @@
 @extends('layouts.app')
 
+@section('title', 'Notes')
+
 @section('content')
 
 <create-note></create-note>
 <div class="container-fluid">
     <div class="container-row row">
-    <aside class="sidebar-container col-xl-2 col-lg-3 col-md-4 col-sm-4">
+    <aside class="sidebar-container animate">
         <div class="sidebar">
                 <search-sidebar></search-sidebar>
                 <notes-sidebar></notes-sidebar>
         </div>
     </aside>
-    <main class="col-xl-10 col-lg-9 col-md-8 col-sm-8">
+    <main class="main-wrap animate">
         <header class="toolbar row">
-            <toolbar></toolbar>
+            <notes-toolbar></notes-toolbar>
 
             <div class="account col-xl-2 col-md-2 col-sm-4">
                 <div class="nav-item dropdown">
@@ -40,11 +42,11 @@
         </header>
 
         <div class="tags">
-            <tags></tags>
+            <notes-tags></notes-tags>
         </div>
         <div class="notes-container">
             <div class="content">
-                <tinymce></tinymce>
+                <notes-tinymce></notes-tinymce>
             </div>
         </div>
     </main>

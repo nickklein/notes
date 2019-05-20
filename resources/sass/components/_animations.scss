@@ -1,0 +1,49 @@
+.animate {
+    @include media-breakpoint-down(sm) {
+        &.slideOutSidebar {
+            animation: slideOutSidebar .25s ease both;
+            -webkit-animation-delay: 0s;
+            animation-delay: 0s;
+        }
+        &.slideInSidebar {
+            animation: slideInSidebar .25s ease both;
+            -webkit-animation-delay: 0s;
+            animation-delay: 0s;
+        }
+        &.slideOutMain {
+            animation: slideOutMain .25s ease both;
+        }
+        &.slideInMain {
+            animation: slideInMain .25s ease both;
+
+        }
+    }
+}
+
+
+@keyframes slideOutSidebar {
+  100% {
+      width: 0;
+      padding: 0;
+  }
+}
+
+
+@keyframes slideInSidebar {
+  100% {
+      width: 100%;
+  }
+}
+
+@keyframes slideOutMain {
+  100% {
+    transform: translate3d(100%, 0px, 0px );
+  }
+}
+
+@keyframes slideInMain {
+
+  100% {
+    transform: translate3d(0%, 0px, 0px );
+  }
+}

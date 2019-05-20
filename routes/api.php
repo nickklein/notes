@@ -29,4 +29,5 @@ Route::get('/notes/feed/{search}', 'api\NotesController@getUserNotes')->name('no
 
 Route::post('/notes/create', 'api\NotesController@create');
 Route::post('/notes/remove', 'api\NotesController@destroy');
+Route::post('/notes/pin', 'api\NotesController@pin');
 Route::post('/notes/update', 'api\NotesController@update');
