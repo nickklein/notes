@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use notes\Http\Controllers\Controller;
 use notes\Models\Notes;
 use notes\Models\NotesRel;
+use notes\Models\NotesSettingsRel;
 use notes\Src\NotesHelper;
 use Auth;
 
@@ -108,6 +109,10 @@ class NotesController extends Controller
      */
     public function update(Request $request)
     {
+    	$this->validate($request, [
+            'page_id' => 'required|integer',
+        ]);
+
         $user_id = Auth::user()->id;
         $note = Notes::NotesRel()
                     ->where([
@@ -120,7 +125,10 @@ class NotesController extends Controller
         $note->note_title = $notes_helper['title'];
         $note->note_content = $notes_helper['content'];
         $note->note_caption = $notes_helper['caption'];
-        $note->save();
+        if ($note->save()) {
+            return response()->json(array('success' => true));
+        }
+        return response()->json(array('success' => false));
     }
 
     /**
@@ -134,5 +142,24 @@ class NotesController extends Controller
         //
         $note = Notes::find($request->page_id);
         $note->delete();
+    }
+
+    public function pin(Request $request)
+    {
+    	$this->validate($request, [
+            'page_id' => 'required|integer',
+        ]);
+
+        $user_id = Auth::user()->id;
+        $notes = Notes::GetNote($user_id, $request->page_id)->SettingsRel(2)->first();
+        if(empty($notes)) {
+            $notesSettingsRel = NotesSettingsRel::firstOrCreate(
+                ['nsetting_id' => 2, 'note_id' => $request->page_id],
+                ['nsetting_id' => 2, 'note_id' => $request->page_id]
+            );
+            return response()->json(array('success' => true, 'action' => 'add'));
+        }
+        NotesSettingsRel::find($notes->nsettingrel_id)->delete();
+        return response()->json(array('success' => true, 'action' => 'delete'));
     }
 }

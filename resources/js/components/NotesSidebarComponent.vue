@@ -18,7 +18,7 @@
         data() {
             return {
                 items: [],
-                selected: 0
+                selected: pageid
             }
         },
         methods: {
@@ -37,7 +37,17 @@
 
                 bus.$emit('updateComponents', note_id);
 
-                this.selected = note_id;
+                this.selected = note_id;                
+                
+                var sidebarContainer = document.querySelector('.sidebar-container');
+                var mainWrap = document.querySelector('.main-wrap');
+
+                sidebarContainer.classList.remove('slideInSidebar');
+                sidebarContainer.classList.add('slideOutSidebar');
+                mainWrap.classList.remove('slideOutMain');
+                mainWrap.classList.add('slideInMain');
+
+
             }
         },
         created: function() {
@@ -50,3 +60,6 @@
 
     }
 </script>
+<style scoped>
+
+</style>
