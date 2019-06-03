@@ -3,6 +3,8 @@
 namespace notes\Http\Controllers\Auth;
 
 use notes\User;
+use notes\Models\Notes;
+use notes\Models\NotesRel;
 use notes\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
@@ -49,7 +51,6 @@ class RegisterController extends Controller
     protected function validator(array $data)
     {
         return Validator::make($data, [
-            'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
@@ -63,10 +64,26 @@ class RegisterController extends Controller
      */
     protected function create(array $data)
     {
-        return User::create([
-            'name' => $data['name'],
+        $user = User::create([
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
         ]);
+
+        $user_id = $user->id;
+        $note = new Notes;
+        $note->note_title = 'Title your note';
+        $note->note_content = '<h1><span style="color: #3598db;">Title your note</span></h1><p>Here\'s your paragraph</p>';
+        $note->note_caption = 'Here\'s your paragraph';
+        if ($note->save()) {
+            $note_rel = new NotesRel;
+            $note_rel->note_id = $note->note_id;
+            $note_rel->user_id = $user_id;
+            $note_rel->permission = 'admin';
+            $note_rel->order = 0;
+            $note_rel->save();
+        }
+
+
+        return $user;
     }
 }

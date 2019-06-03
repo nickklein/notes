@@ -19,3 +19,5 @@ Auth::routes();
 
 Route::get('/app', 'HomeController@index')->name('home');
 Route::get('/app/{id}', 'HomeController@index')->name('home');
+
+Route::get('/settings/account', 'AccountController@account')->name('settings/account');

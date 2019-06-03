@@ -3197,6 +3197,10 @@ a:hover {
   overflow: hidden;
 }
 
+.btn-full-width {
+  width: 100%;
+}
+
 @media (max-width: 767.98px) {
   .animate.slideOutSidebar {
     -webkit-animation: slideOutSidebar 0.25s ease both;
@@ -3275,6 +3279,11 @@ a:hover {
     -webkit-transform: translate3d(0%, 0px, 0px);
             transform: translate3d(0%, 0px, 0px);
   }
+}
+
+input[type=email],
+input[type=password] {
+  background: #FCFCFC;
 }
 
 #app {
@@ -3400,6 +3409,7 @@ a:hover {
 }
 
 .sidebar-container .sidebar .notes-container a {
+  position: relative;
   color: #000;
   display: block;
   width: 100%;
@@ -3427,6 +3437,22 @@ a:hover {
 .sidebar-container .sidebar .notes-container a.active h5,
 .sidebar-container .sidebar .notes-container a.active p.caption {
   color: #fff;
+}
+
+.sidebar-container .sidebar .notes-container a.pinned span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 25px 25px 0 0;
+  border-color: #298DD6 transparent transparent transparent;
+}
+
+.sidebar-container .sidebar .notes-container a.pinned.active span,
+.sidebar-container .sidebar .notes-container a.pinned:hover span {
+  border-color: #000 transparent transparent transparent;
 }
 
 .main-wrap {
@@ -3480,7 +3506,7 @@ a:hover {
   width: 100%;
   padding-right: 15px;
   padding-left: 15px;
-  display: block;
+  display: flex;
 }
 
 @media (min-width: 576px) {
@@ -3490,13 +3516,22 @@ a:hover {
 }
 
 .main-wrap .toolbar .mobile-menu .back-menu {
-  flex: 0 0 50%;
-  max-width: 50%;
+  flex: 0 0 16.6666666667%;
+  max-width: 16.6666666667%;
 }
 
 .main-wrap .toolbar .mobile-menu .right-tools {
-  flex: 0 0 50%;
-  max-width: 50%;
+  flex: 0 0 75%;
+  max-width: 75%;
+}
+
+.main-wrap .toolbar .back-menu {
+  margin: 10px;
+}
+
+.main-wrap .toolbar .back-menu ul,
+.main-wrap .toolbar .back-menu li {
+  list-style-type: none;
 }
 
 .main-wrap .toolbar .left-tools {
@@ -3520,7 +3555,31 @@ a:hover {
   width: 23px;
 }
 
-.main-wrap .toolbar .left-tools li a img {
+.main-wrap .toolbar .left-tools li a img,
+.main-wrap .toolbar .left-tools li a svg {
+  width: 100%;
+  height: 100%;
+}
+
+.main-wrap .toolbar .left-tools li a.active,
+.main-wrap .toolbar .left-tools li a:hover {
+  fill: #298DD6;
+}
+
+.main-wrap .toolbar .right-tools li {
+  list-style-type: none;
+  float: right;
+  margin: 10px;
+}
+
+.main-wrap .toolbar .right-tools li a {
+  display: block;
+  height: 23px;
+  width: 23px;
+}
+
+.main-wrap .toolbar .right-tools li a img,
+.main-wrap .toolbar .right-tools li a svg {
   width: 100%;
   height: 100%;
 }
@@ -3536,10 +3595,7 @@ a:hover {
 }
 
 .main-wrap .toolbar .account #navbarDropdown {
-  float: right;
   margin: 3px 35px;
-  width: 50px;
-  height: 50px;
   display: block;
 }
 
@@ -3573,5 +3629,97 @@ a:hover {
 
 .main-wrap .notes-container .tox-tinymce .tox-edit-area {
   border-top: none;
+}
+
+nav {
+  position: relative;
+  width: 100%;
+  padding-right: 15px;
+  padding-left: 15px;
+  margin-bottom: 5em;
+}
+
+nav #logo a {
+  display: block;
+  margin: 1em;
+}
+
+@media (min-width: 576px) {
+  nav #logo {
+    flex: 0 0 50%;
+    max-width: 50%;
+  }
+}
+
+@media (min-width: 768px) {
+  nav #logo {
+    flex: 0 0 50%;
+    max-width: 50%;
+  }
+}
+
+@media (min-width: 992px) {
+  nav #logo {
+    flex: 0 0 50%;
+    max-width: 50%;
+  }
+}
+
+@media (min-width: 1200px) {
+  nav #logo {
+    flex: 0 0 75%;
+    max-width: 75%;
+  }
+}
+
+@media (min-width: 576px) {
+  nav #navigation {
+    flex: 0 0 50%;
+    max-width: 50%;
+  }
+}
+
+@media (min-width: 768px) {
+  nav #navigation {
+    flex: 0 0 50%;
+    max-width: 50%;
+  }
+}
+
+@media (min-width: 992px) {
+  nav #navigation {
+    flex: 0 0 50%;
+    max-width: 50%;
+  }
+}
+
+@media (min-width: 1200px) {
+  nav #navigation {
+    flex: 0 0 25%;
+    max-width: 25%;
+  }
+}
+
+nav #navigation li {
+  float: right;
+  list-style-type: none;
+  margin: 1em;
+}
+
+.login-container .card-header {
+  margin-bottom: 1.2em;
+}
+
+.login-container .form-control {
+  padding: 1.5em 0.8em;
+}
+
+.login-container .form-group.row {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.login-container .btn-full-width {
+  padding: 0.9em;
 }
 

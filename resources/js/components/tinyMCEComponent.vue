@@ -2,8 +2,7 @@
     <div class="editor">
      <editor api-key="xi75lgpx8te8lp53zmlfxo54bolufdlza2jow261unsyief8"
         v-model="content" 
-        @onFocusOut="saveContent"
-        @onFocusIn="toolBar"
+        @input="saveContent"
         :init="{
         branding: false, 
         height: '500px', 
@@ -11,7 +10,6 @@
         mobile: {
             theme: 'silver'
         },
-
         toolbar: 'formatselect | bold italic strikethrough forecolor permanentpen formatpainter | link image | alignleft aligncenter alignright alignjustify  | numlist bullist | removeformat | addcomment', 
         plugins: 'advlist autolink lists link image charmap print preview anchor textcolor searchreplace visualblocks code fullscreen insertdatetime media table paste code help'}">
          This is a paragraph
@@ -39,16 +37,19 @@ export default {
         fetch: function(pageid) {
             this.$http.get('/api/note/' + pageid)
             .then(function(response) {
+                console.log(response.data[0].nsetting_id);
+                var activePin = false;
+                if (response.data[0].nsetting_id !== null && response.data[0].nsetting_id == '2') {
+                    activePin = true;
+                }
+                bus.$emit('activePin', activePin);
                 this.content = response.data[0].note_content;
             });
         },
-        saveContent: function() { 
+        saveContent: _.debounce(function () {
             this.$http.post('/api/notes/update', {page_id: pageid, content: this.content,_token: window.Laravel['csrfToken']});
             bus.$emit('filterSidebar', '');
-        },
-        toolBar: function() {
-            console.log(tinyMCE);
-        }
+        }, 500)
     },
     created() {
         this.fetch(pageid);

@@ -1,0 +1,62 @@
+nav {
+    @include make-col-ready();
+    margin-bottom: 5em;
+    #logo {
+        a {
+            display: block;
+            margin: 1em;
+        }
+        @include media-breakpoint-up(sm) {
+            @include make-col(6);
+        }
+        @include media-breakpoint-up(md) {
+            @include make-col(6);
+        }
+        @include media-breakpoint-up(lg) {
+            @include make-col(6);
+        }
+        @include media-breakpoint-up(xl) {
+            @include make-col(9);
+        }
+    }
+
+    #navigation {
+        @include media-breakpoint-up(sm) {
+            @include make-col(6);
+        }
+        @include media-breakpoint-up(md) {
+            @include make-col(6);
+        }
+        @include media-breakpoint-up(lg) {
+            @include make-col(6);
+        }
+        @include media-breakpoint-up(xl) {
+            @include make-col(3);
+        }
+        li {
+            float: right;
+            list-style-type: none;
+            margin: 1em;
+
+        }
+    }
+
+}
+
+.login-container {
+    .card-header {
+        margin-bottom: 1.2em;
+    }
+    .form-control {
+        padding: 1.5em 0.8em;
+    }
+    .form-group {
+        &.row {
+            margin-left: 0;
+            margin-right: 0;
+        }
+    }
+    .btn-full-width {
+        padding: 0.9em;
+    }
+}
