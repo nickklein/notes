@@ -20,10 +20,10 @@
             <div class="account col-xl-2 col-md-2 col-sm-4">
                 <div class="nav-item dropdown">
                     <a id="navbarDropdown" class="nav-link dropdown-toggle" href="#" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" v-pre>
-                        <img src="/images/profile_full.jpg" alt="nick klein"> <span class="caret"></span>
+                        {{ Auth::user()->email }}<span class="caret"></span>
                     </a>
 
-                    <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdown">
+                    <div class="dropdown-menu dropdown-menu-bottom" aria-labelledby="navbarDropdown">
                         <a class="dropdown-item" href="">
                             Settings
                         </a>

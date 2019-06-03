@@ -2278,13 +2278,15 @@ __webpack_require__.r(__webpack_exports__);
 //
 //
 //
+//
 
 /* harmony default export */ __webpack_exports__["default"] = ({
   name: 'notes-sidebar',
   data: function data() {
     return {
       items: [],
-      selected: pageid
+      selected: pageid,
+      pinnedNote: false
     };
   },
   methods: {
@@ -2444,19 +2446,40 @@ __webpack_require__.r(__webpack_exports__);
 
 /* harmony default export */ __webpack_exports__["default"] = ({
   name: 'notes-toolbar',
+  data: function data() {
+    return {
+      activePin: false,
+      titlePin: 'Pin'
+    };
+  },
   methods: {
     pin: function pin() {
       this.$http.post('/api/notes/pin', {
         page_id: pageid,
         _token: window.Laravel['csrfToken']
+      }).then(function (response) {
+        if (response.data.success && response.data.action == 'add') {
+          this.titlePin = 'Unpin';
+          this.activePin = true;
+        }
+
+        if (response.data.success && response.data.action == 'delete') {
+          this.titlePin = 'Pin';
+          this.activePin = false;
+        }
+
+        _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$emit('filterSidebar', '');
       });
     },
     remove: function remove() {
       this.$http.post('/api/notes/remove', {
         page_id: pageid,
         _token: window.Laravel['csrfToken']
+      }).then(function (response) {
+        if (response.data.success) {
+          _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$emit('filterSidebar', '');
+        }
       });
-      _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$emit('filterSidebar', '');
     },
     back: function back() {
       var sidebarContainer = document.querySelector('.sidebar-container');
@@ -2466,6 +2489,19 @@ __webpack_require__.r(__webpack_exports__);
       mainWrap.classList.remove('slideInMain');
       mainWrap.classList.add('slideOutMain');
     }
+  },
+  created: function created() {
+    var _this = this;
+
+    _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$on('activePin', function (status) {
+      _this.titlePin = 'Pin';
+
+      if (status) {
+        _this.titlePin = 'Unpin';
+      }
+
+      _this.activePin = status;
+    });
   }
 });
 
@@ -2500,8 +2536,6 @@ __webpack_require__.r(__webpack_exports__);
 //
 //
 //
-//
-//
 
 
 /* harmony default export */ __webpack_exports__["default"] = ({
@@ -2517,20 +2551,25 @@ __webpack_require__.r(__webpack_exports__);
   methods: {
     fetch: function fetch(pageid) {
       this.$http.get('/api/note/' + pageid).then(function (response) {
+        console.log(response.data[0].nsetting_id);
+        var activePin = false;
+
+        if (response.data[0].nsetting_id !== null && response.data[0].nsetting_id == '2') {
+          activePin = true;
+        }
+
+        _app__WEBPACK_IMPORTED_MODULE_1__["bus"].$emit('activePin', activePin);
         this.content = response.data[0].note_content;
       });
     },
-    saveContent: function saveContent() {
+    saveContent: _.debounce(function () {
       this.$http.post('/api/notes/update', {
         page_id: pageid,
         content: this.content,
         _token: window.Laravel['csrfToken']
       });
       _app__WEBPACK_IMPORTED_MODULE_1__["bus"].$emit('filterSidebar', '');
-    },
-    toolBar: function toolBar() {
-      console.log(tinyMCE);
-    }
+    }, 500)
   },
   created: function created() {
     var _this = this;
@@ -37688,7 +37727,10 @@ var render = function() {
         _c(
           "a",
           {
-            class: { active: item.note_id == _vm.selected },
+            class: {
+              active: item.note_id == _vm.selected,
+              pinned: item.pinned
+            },
             attrs: { href: "#", note_id: item.note_id },
             on: { click: _vm.changeNote }
           },
@@ -37697,7 +37739,9 @@ var render = function() {
             _vm._v(" "),
             _c("p", { staticClass: "caption" }, [
               _vm._v(_vm._s(item.note_caption))
-            ])
+            ]),
+            _vm._v(" "),
+            _c("span")
           ]
         )
       ])
@@ -37815,123 +37859,215 @@ var render = function() {
     _c("div", { staticClass: "mobile-menu row" }, [
       _c("ul", { staticClass: "back-menu" }, [
         _c("li", [
-          _c("a", { attrs: { href: "#" }, on: { click: _vm.back } }, [
-            _c("img", {
-              attrs: {
-                title: "Favourite",
-                src: "/images/icons/left-arrow.svg",
-                alt: "Go back"
-              }
-            })
-          ])
+          _c(
+            "a",
+            {
+              attrs: { href: "#", title: "Favourite" },
+              on: { click: _vm.back }
+            },
+            [
+              _c(
+                "svg",
+                { attrs: { width: "32", height: "32", viewBox: "0 0 32 32" } },
+                [
+                  _c("path", {
+                    attrs: {
+                      d:
+                        "M12.586 27.414l-10-10c-0.781-0.781-0.781-2.047 0-2.828l10-10c0.781-0.781 2.047-0.781 2.828 0s0.781 2.047 0 2.828l-6.586 6.586h19.172c1.105 0 2 0.895 2 2s-0.895 2-2 2h-19.172l6.586 6.586c0.39 0.39 0.586 0.902 0.586 1.414s-0.195 1.024-0.586 1.414c-0.781 0.781-2.047 0.781-2.828 0z"
+                    }
+                  })
+                ]
+              )
+            ]
+          )
         ])
       ]),
       _vm._v(" "),
-      _vm._m(0)
+      _c("ul", { staticClass: "right-tools" }, [
+        _c("li", [
+          _c("a", { attrs: { href: "#" } }, [
+            _c(
+              "svg",
+              { attrs: { width: "32", height: "32", viewBox: "0 0 32 32" } },
+              [
+                _c("path", {
+                  attrs: {
+                    d:
+                      "M14 9.5c0-0.825 0.675-1.5 1.5-1.5h1c0.825 0 1.5 0.675 1.5 1.5v1c0 0.825-0.675 1.5-1.5 1.5h-1c-0.825 0-1.5-0.675-1.5-1.5v-1z"
+                  }
+                }),
+                _c("path", { attrs: { d: "M20 24h-8v-2h2v-6h-2v-2h6v8h2z" } }),
+                _c("path", {
+                  attrs: {
+                    d:
+                      "M16 0c-8.837 0-16 7.163-16 16s7.163 16 16 16 16-7.163 16-16-7.163-16-16-16zM16 29c-7.18 0-13-5.82-13-13s5.82-13 13-13 13 5.82 13 13-5.82 13-13 13z"
+                  }
+                })
+              ]
+            )
+          ])
+        ]),
+        _vm._v(" "),
+        _c("li", [
+          _c(
+            "a",
+            {
+              class: { active: _vm.activePin },
+              attrs: { href: "#", title: _vm.titlePin },
+              on: { click: _vm.pin }
+            },
+            [
+              _c(
+                "svg",
+                { attrs: { width: "32", height: "32", viewBox: "0 0 32 32" } },
+                [
+                  _c("path", {
+                    attrs: {
+                      d:
+                        "M17 0l-3 3 3 3-7 8h-7l5.5 5.5-8.5 11.269v1.231h1.231l11.269-8.5 5.5 5.5v-7l8-7 3 3 3-3-15-15zM14 17l-2-2 7-7 2 2-7 7z"
+                    }
+                  })
+                ]
+              )
+            ]
+          )
+        ]),
+        _vm._v(" "),
+        _c("li", [
+          _c("a", { attrs: { href: "#" }, on: { click: _vm.remove } }, [
+            _c(
+              "svg",
+              { attrs: { width: "32", height: "32", viewBox: "0 0 32 32" } },
+              [
+                _c("path", {
+                  attrs: {
+                    d:
+                      "M4 10v20c0 1.1 0.9 2 2 2h18c1.1 0 2-0.9 2-2v-20h-22zM10 28h-2v-14h2v14zM14 28h-2v-14h2v14zM18 28h-2v-14h2v14zM22 28h-2v-14h2v14z"
+                  }
+                }),
+                _c("path", {
+                  attrs: {
+                    d:
+                      "M26.5 4h-6.5v-2.5c0-0.825-0.675-1.5-1.5-1.5h-7c-0.825 0-1.5 0.675-1.5 1.5v2.5h-6.5c-0.825 0-1.5 0.675-1.5 1.5v2.5h26v-2.5c0-0.825-0.675-1.5-1.5-1.5zM18 4h-6v-1.975h6v1.975z"
+                  }
+                })
+              ]
+            )
+          ])
+        ]),
+        _vm._v(" "),
+        _c("li", [
+          _c("a", { attrs: { href: "#" } }, [
+            _c(
+              "svg",
+              { attrs: { width: "32", height: "32", viewBox: "0 0 32 32" } },
+              [
+                _c("path", {
+                  attrs: {
+                    d:
+                      "M18.5 14h-0.5v-6c0-3.308-2.692-6-6-6h-4c-3.308 0-6 2.692-6 6v6h-0.5c-0.825 0-1.5 0.675-1.5 1.5v15c0 0.825 0.675 1.5 1.5 1.5h17c0.825 0 1.5-0.675 1.5-1.5v-15c0-0.825-0.675-1.5-1.5-1.5zM6 8c0-1.103 0.897-2 2-2h4c1.103 0 2 0.897 2 2v6h-8v-6z"
+                  }
+                })
+              ]
+            )
+          ])
+        ])
+      ])
     ]),
     _vm._v(" "),
     _c("ul", { staticClass: "left-tools col-xl-10 col-md-10 " }, [
-      _vm._m(1),
+      _c("li", [
+        _c("a", { attrs: { href: "#" } }, [
+          _c(
+            "svg",
+            { attrs: { width: "32", height: "32", viewBox: "0 0 32 32" } },
+            [
+              _c("path", {
+                attrs: {
+                  d:
+                    "M14 9.5c0-0.825 0.675-1.5 1.5-1.5h1c0.825 0 1.5 0.675 1.5 1.5v1c0 0.825-0.675 1.5-1.5 1.5h-1c-0.825 0-1.5-0.675-1.5-1.5v-1z"
+                }
+              }),
+              _c("path", { attrs: { d: "M20 24h-8v-2h2v-6h-2v-2h6v8h2z" } }),
+              _c("path", {
+                attrs: {
+                  d:
+                    "M16 0c-8.837 0-16 7.163-16 16s7.163 16 16 16 16-7.163 16-16-7.163-16-16-16zM16 29c-7.18 0-13-5.82-13-13s5.82-13 13-13 13 5.82 13 13-5.82 13-13 13z"
+                }
+              })
+            ]
+          )
+        ])
+      ]),
       _vm._v(" "),
       _c("li", [
-        _c("a", { attrs: { href: "#" }, on: { click: _vm.pin } }, [
-          _c("img", {
-            attrs: {
-              title: "Favourite",
-              src: "/images/icons/pushpin.svg",
-              alt: "Favourite"
-            }
-          })
-        ])
+        _c(
+          "a",
+          {
+            class: { active: _vm.activePin },
+            attrs: { href: "#", title: _vm.titlePin },
+            on: { click: _vm.pin }
+          },
+          [
+            _c(
+              "svg",
+              { attrs: { width: "32", height: "32", viewBox: "0 0 32 32" } },
+              [
+                _c("path", {
+                  attrs: {
+                    d:
+                      "M17 0l-3 3 3 3-7 8h-7l5.5 5.5-8.5 11.269v1.231h1.231l11.269-8.5 5.5 5.5v-7l8-7 3 3 3-3-15-15zM14 17l-2-2 7-7 2 2-7 7z"
+                  }
+                })
+              ]
+            )
+          ]
+        )
       ]),
       _vm._v(" "),
       _c("li", [
         _c("a", { attrs: { href: "#" }, on: { click: _vm.remove } }, [
-          _c("img", {
-            attrs: {
-              title: "Delete",
-              src: "/images/icons/bin.svg",
-              alt: "Delete"
-            }
-          })
+          _c(
+            "svg",
+            { attrs: { width: "32", height: "32", viewBox: "0 0 32 32" } },
+            [
+              _c("path", {
+                attrs: {
+                  d:
+                    "M4 10v20c0 1.1 0.9 2 2 2h18c1.1 0 2-0.9 2-2v-20h-22zM10 28h-2v-14h2v14zM14 28h-2v-14h2v14zM18 28h-2v-14h2v14zM22 28h-2v-14h2v14z"
+                }
+              }),
+              _c("path", {
+                attrs: {
+                  d:
+                    "M26.5 4h-6.5v-2.5c0-0.825-0.675-1.5-1.5-1.5h-7c-0.825 0-1.5 0.675-1.5 1.5v2.5h-6.5c-0.825 0-1.5 0.675-1.5 1.5v2.5h26v-2.5c0-0.825-0.675-1.5-1.5-1.5zM18 4h-6v-1.975h6v1.975z"
+                }
+              })
+            ]
+          )
         ])
       ]),
       _vm._v(" "),
-      _vm._m(2)
-    ])
-  ])
-}
-var staticRenderFns = [
-  function() {
-    var _vm = this
-    var _h = _vm.$createElement
-    var _c = _vm._self._c || _h
-    return _c("div", { staticClass: "right-tools btn-group" }, [
-      _c(
-        "a",
-        {
-          staticClass: "dropdown-toggle",
-          attrs: {
-            "data-toggle": "dropdown",
-            "aria-haspopup": "true",
-            "aria-expanded": "false"
-          }
-        },
-        [
-          _c("img", {
-            attrs: { title: "Info", src: "/images/icons/menu.svg", alt: "info" }
-          })
-        ]
-      ),
-      _vm._v(" "),
-      _c("div", { staticClass: "dropdown-menu scrollable-menu" }, [
-        _c("a", { staticClass: "dropdown-item", attrs: { href: "#" } }, [
-          _vm._v("Info")
-        ]),
-        _vm._v(" "),
-        _c("a", { staticClass: "dropdown-item", attrs: { href: "#" } }, [
-          _vm._v("Favourite")
-        ]),
-        _vm._v(" "),
-        _c("a", { staticClass: "dropdown-item", attrs: { href: "#" } }, [
-          _vm._v("Delete")
-        ]),
-        _vm._v(" "),
-        _c("a", { staticClass: "dropdown-item", attrs: { href: "#" } }, [
-          _vm._v("Encrypt")
+      _c("li", [
+        _c("a", { attrs: { href: "#" } }, [
+          _c(
+            "svg",
+            { attrs: { width: "32", height: "32", viewBox: "0 0 32 32" } },
+            [
+              _c("path", {
+                attrs: {
+                  d:
+                    "M18.5 14h-0.5v-6c0-3.308-2.692-6-6-6h-4c-3.308 0-6 2.692-6 6v6h-0.5c-0.825 0-1.5 0.675-1.5 1.5v15c0 0.825 0.675 1.5 1.5 1.5h17c0.825 0 1.5-0.675 1.5-1.5v-15c0-0.825-0.675-1.5-1.5-1.5zM6 8c0-1.103 0.897-2 2-2h4c1.103 0 2 0.897 2 2v6h-8v-6z"
+                }
+              })
+            ]
+          )
         ])
       ])
     ])
-  },
-  function() {
-    var _vm = this
-    var _h = _vm.$createElement
-    var _c = _vm._self._c || _h
-    return _c("li", [
-      _c("a", { attrs: { href: "#" } }, [
-        _c("img", {
-          attrs: { title: "Info", src: "/images/icons/info.svg", alt: "info" }
-        })
-      ])
-    ])
-  },
-  function() {
-    var _vm = this
-    var _h = _vm.$createElement
-    var _c = _vm._self._c || _h
-    return _c("li", [
-      _c("a", { attrs: { href: "#" } }, [
-        _c("img", {
-          attrs: {
-            title: "Encrypt",
-            src: "/images/icons/lock.svg",
-            alt: "Encrypt"
-          }
-        })
-      ])
-    ])
-  }
-]
+  ])
+}
+var staticRenderFns = []
 render._withStripped = true
 
 
@@ -37969,14 +38105,13 @@ var render = function() {
               mobile: {
                 theme: "silver"
               },
-
               toolbar:
                 "formatselect | bold italic strikethrough forecolor permanentpen formatpainter | link image | alignleft aligncenter alignright alignjustify  | numlist bullist | removeformat | addcomment",
               plugins:
                 "advlist autolink lists link image charmap print preview anchor textcolor searchreplace visualblocks code fullscreen insertdatetime media table paste code help"
             }
           },
-          on: { onFocusOut: _vm.saveContent, onFocusIn: _vm.toolBar },
+          on: { input: _vm.saveContent },
           model: {
             value: _vm.content,
             callback: function($$v) {

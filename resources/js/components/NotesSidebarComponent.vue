@@ -1,9 +1,10 @@
 <template>
         <ul class="notes-container">
             <li class="note" v-for="(item, index) in items" :key="index">
-                <a href="#" v-on:click="changeNote" :class="{active:item.note_id == selected}" :note_id="item.note_id">
+                <a href="#" v-on:click="changeNote" :class="{active:item.note_id == selected, pinned:item.pinned}" :note_id="item.note_id">
                     <h5>{{item.note_title}}</h5>
                     <p class="caption">{{item.note_caption}}</p>
+                    <span></span>
                 </a>
             </li>
         </ul>
@@ -18,7 +19,8 @@
         data() {
             return {
                 items: [],
-                selected: pageid
+                selected: pageid,
+                pinnedNote: false
             }
         },
         methods: {

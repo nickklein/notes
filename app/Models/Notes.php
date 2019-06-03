@@ -28,8 +28,7 @@ class Notes extends Model
                             $query->where('notes.note_title', 'like', '%' . $search . '%')
                                 ->orWhere('notes.note_content', 'like', '%' . $search . '%');
                         });
-                })
-                ->orderby('notes.updated_at', 'DESC');
+                });
     }
     public function scopeGetNote(Builder $query, $user_id, $note_id)
     {

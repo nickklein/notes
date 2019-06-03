@@ -30,15 +30,44 @@ class NotesController extends Controller
 
     public function getUserNotes(Request $request)
     {
+        $excludePinnedIds = [];
         $user_id = Auth::user()->id;
-        $notes = Notes::RelationshipFilter($user_id, $request->search)->get();
+
+        $pinned = Notes::RelationshipFilter($user_id, $request->search)
+                        ->leftJoin('notes_settings_rel', 'notes_settings_rel.note_id', 'notes.note_id')
+                        ->where('notes_settings_rel.nsetting_id', 2)
+                        ->orderby('notes.updated_at', 'DESC')->get();
+
+        $excludePinnedIds = $pinned->pluck('note_id')->toArray();
+
+        // Pin/Unpin items
+        $pinned = $pinned->map(function ($pin) {
+            $pin->pinned = true;
+            return $pin;
+        });
+
+
+        $notes = Notes::RelationshipFilter($user_id, $request->search)
+                        ->whereNotIn('notes.note_id', $excludePinnedIds)
+                        ->orderby('notes.updated_at', 'DESC')
+                        ->get();
+
+        // Pin/Unpin items
+        $notes = $notes->each(function ($note) {
+            $note->pinned = false;
+            return $note;
+        });
+        $notes = $pinned->merge($notes);
+
         return response()->json($notes);
     }
     
     public function getNote(Request $request)
     {
         $user_id = Auth::user()->id;
-        $notes = Notes::GetNote($user_id, $request->id)->get();
+        $notes = Notes::GetNote($user_id, $request->id)
+                        ->leftJoin('notes_settings_rel', 'notes_settings_rel.note_id', 'notes.note_id')
+                        ->get();
         return response()->json($notes);
     }
 
@@ -139,9 +168,25 @@ class NotesController extends Controller
      */
     public function destroy(Request $request)
     {
-        //
-        $note = Notes::find($request->page_id);
-        $note->delete();
+    	$this->validate($request, [
+            'page_id' => 'required|integer',
+        ]);
+
+        // Check for user
+        $user_id = Auth::user()->id;
+        $note  = Notes::GetNote($user_id, $request->page_id)->first();
+        $count = Notes::RelationshipFilter($user_id, '')->count();
+        
+        if (!empty($note)) {
+            if ($count == 1) {
+                return response()->json(array('success' => false, 'action' => 'last note'));
+            }
+            if ($note->delete()) {
+                return response()->json(array('success' => true));
+            }
+        }
+
+        return response()->json(array('success' => false, 'action' => 'permission denied'));
     }
 
     public function pin(Request $request)
