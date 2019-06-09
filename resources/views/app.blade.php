@@ -24,7 +24,7 @@
                     </a>
 
                     <div class="dropdown-menu dropdown-menu-bottom" aria-labelledby="navbarDropdown">
-                        <a class="dropdown-item" href="">
+                        <a class="dropdown-item" href="{{ route('settings/account') }}">
                             Settings
                         </a>
                         <a class="dropdown-item" href="{{ route('logout') }}"

@@ -21,3 +21,7 @@ Route::get('/app', 'HomeController@index')->name('home');
 Route::get('/app/{id}', 'HomeController@index')->name('home');
 
 Route::get('/settings/account', 'AccountController@account')->name('settings/account');
+Route::patch('/settings/account/update', 'AccountController@updateAccount')->name('settings/account/update');
+Route::post('/settings/account/destroy', 'AccountController@destroyAccount')->name('settings/account/destroy');
+Route::get('/settings/password', 'AccountController@password')->name('settings/password');
+Route::patch('/settings/password/update', 'AccountController@updatePassword')->name('settings/password/update');

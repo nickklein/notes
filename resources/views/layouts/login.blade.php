@@ -18,10 +18,18 @@
 
     <!-- Styles -->
     <link href="{{ asset('css/app.css') }}" rel="stylesheet">
+
+    <script>
+        window.Laravel = <?php echo json_encode([
+            'csrfToken' => csrf_token(),
+        ]); ?>
+    </script>
+
+
 </head>
 <body>
     <div id="app">
-        <div class="login-container">
+        <div class="internal-container">
             <nav>
                 <div class="row">
                     <div id="logo">
@@ -30,10 +38,34 @@
                         </a>
                     </div>
 
-                    <ul id="navigation">
-                        <li><a class="nav-link" href="{{ route('register') }}">{{ __('Create an account') }}</a></li>
-                        <li><a class="nav-link" href="{{ route('login') }}">{{ __('Login') }}</a></li>
-                    </ul>
+                    @if (Auth::check())
+                        <div class="nav-item dropdown">
+                            <a id="navbarDropdown" class="nav-link dropdown-toggle" href="#" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" v-pre>
+                                {{ Auth::user()->email }}<span class="caret"></span>
+                            </a>
+
+                            <div class="dropdown-menu dropdown-menu-bottom" aria-labelledby="navbarDropdown">
+                                <a class="dropdown-item" href="{{ route('settings/account') }}">
+                                    Settings
+                                </a>
+                                <a class="dropdown-item" href="{{ route('logout') }}"
+                                    onclick="event.preventDefault();
+                                                    document.getElementById('logout-form').submit();">
+                                    {{ __('Logout') }}
+                                </a>
+
+                                <form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;">
+                                    @csrf
+                                </form>
+                            </div>
+                        </div>
+                    @else
+                        <ul id="navigation">
+                            <li><a class="nav-link" href="{{ route('register') }}">{{ __('Create an account') }}</a></li>
+                            <li><a class="nav-link" href="{{ route('login') }}">{{ __('Login') }}</a></li>
+                        </ul>
+                    @endif
+
                 </div>
             </nav>
 
