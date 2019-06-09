@@ -32,6 +32,7 @@ Vue.component('notes-tags', require('./components/MainTagsComponent.vue').defaul
 Vue.component('create-note', require('./components/CreateNoteComponent.vue').default);
 Vue.component('notes-toolbar', require('./components/ToolbarComponent.vue').default);
 Vue.component('notes-tinymce', require('./components/tinyMCEComponent.vue').default);
+Vue.component('static-modal', require('./components/StaticModalComponent.vue').default);
 
 /**
  * Next, we will create a fresh Vue application instance and attach it to
@@ -41,6 +42,11 @@ Vue.component('notes-tinymce', require('./components/tinyMCEComponent.vue').defa
 
 const app = new Vue({
     el: '#app',
+    data: {
+        showModal: false,
+        test: ''
+    }
+
     // created: function() {
     //     setInterval(function () {
     //         bus.$emit('saveContent', 'tempora');

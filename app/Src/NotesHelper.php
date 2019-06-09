@@ -25,9 +25,9 @@ class NotesHelper
         foreach($elements as $element) {
             if ($dom->getElementsByTagName($element)->length) {
                 if ($element == 'p') {
-                    return [1, substr($dom->getElementsByTagName($element)[0]->nodeValue, 0, 50) . '..'];
+                    return [1, substr($dom->getElementsByTagName($element)[0]->nodeValue, 0, 25) . '..'];
                 }
-                return [0, substr($dom->getElementsByTagName($element)[0]->nodeValue, 0, 50) . '..'];
+                return [0, substr($dom->getElementsByTagName($element)[0]->nodeValue, 0, 25) . '..'];
             }
         }
 
@@ -35,7 +35,7 @@ class NotesHelper
 
     private function getContent($type, $dom, $request)
     {
-        return substr(strip_tags($request->content), 0, 100) . '..';
+        return substr(strip_tags($request->content), 0, 50) . '..';
     }
 
     private function encrypt()

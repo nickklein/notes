@@ -30,18 +30,19 @@ export default {
 			this.$http.post('/api/tags/create', {page_id: pageid, tag_name: obj.tag.text,_token: window.Laravel['csrfToken']});
 			obj.addTag();
 
-      bus.$emit('updateTagsSidebar');
+      		bus.$emit('updateTagsSidebar');
 		},
 		removeTag(obj) {
 			this.$http.post('/api/tags/remove', {page_id: pageid, tag_name: obj.tag.text,_token: window.Laravel['csrfToken']});
 			obj.deleteTag();
 
-      bus.$emit('updateTagsSidebar');
+      		bus.$emit('updateTagsSidebar');
 		},
 		fetch(pageid) {
+			var self = this;
 			this.$http.get('/api/tag/' + pageid)
 			.then(function(response) {
-					this.tags = response.data.data;
+					self.tags = response.data.data;
 			});
 		}
 	},

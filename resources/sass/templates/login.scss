@@ -43,7 +43,7 @@ nav {
 
 }
 
-.login-container {
+.internal-container {
     .card-header {
         margin-bottom: 1.2em;
     }
@@ -59,4 +59,21 @@ nav {
     .btn-full-width {
         padding: 0.9em;
     }
+}
+
+.settings-container {
+    aside {
+        li {
+            list-style-type: none;
+            &.active a {
+                color: #fff;
+                background: $sidebar-link-bg-hover;
+            }
+        }
+        a {
+            display: block;
+            padding: 0.5em 1em;
+            background:$sidebar-bg;
+        }
+    }        
 }
