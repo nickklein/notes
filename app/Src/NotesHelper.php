@@ -2,49 +2,28 @@
 
 namespace notes\Src;
 
+use Illuminate\Support\Facades\Crypt;
+
 class NotesHelper
 {
-
-    public function processContent($request)
+    public static function fetchCaption(string $data)
     {
-        $response = array();
-        $dom = new \DOMDocument();
-        $dom->loadHTML($request->content);
-
-        $elements = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p'];
-        $title = $this->getTitle($dom, $elements);
-        $response['title'] = $title[1];
-        $response['content'] = $request->content;
-        $response['caption'] = $this->getContent($title[0], $dom, $request);
-        
-        return $response;
+        return substr(strip_tags($data), 0, 50) . '..';
     }
 
-    private function getTitle($dom,$elements)
+    public static function encrypt(string $value)
     {
-        foreach($elements as $element) {
-            if ($dom->getElementsByTagName($element)->length) {
-                if ($element == 'p') {
-                    return [1, substr($dom->getElementsByTagName($element)[0]->nodeValue, 0, 25) . '..'];
-                }
-                return [0, substr($dom->getElementsByTagName($element)[0]->nodeValue, 0, 25) . '..'];
-            }
-        }
+        // Regular Encryption
+        return Crypt::encrypt($value);
 
-    }
-
-    private function getContent($type, $dom, $request)
-    {
-        return substr(strip_tags($request->content), 0, 50) . '..';
-    }
-
-    private function encrypt()
-    {
-
+        // Custom Key Encryption
     }
     
-    private function decrypt()
+    public static function decrypt(string $value)
     {
+        // Regular Decryption
+        return Crypt::decrypt($value);
 
+        // Custom Key Decryption
     }
 }

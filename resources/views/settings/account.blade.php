@@ -58,7 +58,8 @@
             placeholder: 'john.smith@example.org',
             type: 'text',
             value: ''
-        }]">
+        }
+        ]">
         <p>Deleting your account will delete all your data from our website, including your notes shared with others in the next 30 days. Are you sure you want to delete your account? Please type in your email to confirm</p>
 </static-modal>
 

@@ -13,6 +13,12 @@ Vue.use(vueResource)
 
 export const bus = new Vue();
 
+Vue.http.interceptors.push((request, next) => {
+    request.headers.set('X-CSRF-TOKEN', Laravel.csrfToken);
+
+    next();
+});
+
 /**
  * The following block of code may be used to automatically register your
  * Vue components. It will recursively scan this directory for the Vue
@@ -27,12 +33,19 @@ export const bus = new Vue();
 //Vue.component('example-component', require('./components/ExampleComponent.vue').default);
 Vue.component('search-sidebar', require('./components/SearchComponent.vue').default);
 Vue.component('notes-sidebar', require('./components/NotesSidebarComponent.vue').default);
-Vue.component('tags-sidebar', require('./components/TagsSidebarComponent.vue').default);
 Vue.component('notes-tags', require('./components/MainTagsComponent.vue').default);
 Vue.component('create-note', require('./components/CreateNoteComponent.vue').default);
 Vue.component('notes-toolbar', require('./components/ToolbarComponent.vue').default);
+Vue.component('notes-title', require('./components/MainTitleComponent.vue').default);
 Vue.component('notes-tinymce', require('./components/tinyMCEComponent.vue').default);
 Vue.component('static-modal', require('./components/StaticModalComponent.vue').default);
+
+
+// Passport
+//Vue.component('passport-client', require('./components/passport/Clients.vue').default);
+//Vue.component('passport-authorized-clients', require('./components/passport/AuthorizedClients.vue').default);
+//Vue.component('passport-personal-access-token', require('./components/passport/PersonalAccessTokens.vue').default);
+
 
 /**
  * Next, we will create a fresh Vue application instance and attach it to

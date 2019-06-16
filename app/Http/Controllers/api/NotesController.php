@@ -3,6 +3,7 @@
 namespace notes\Http\Controllers\api;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 use notes\Http\Controllers\Controller;
 use notes\Models\Notes;
 use notes\Models\NotesRel;
@@ -28,7 +29,7 @@ class NotesController extends Controller
         //
     }
 
-    public function getUserNotes(Request $request)
+    public function fetchSidebar(Request $request)
     {
         $excludePinnedIds = [];
         $user_id = Auth::user()->id;
@@ -39,10 +40,16 @@ class NotesController extends Controller
                         ->orderby('notes.updated_at', 'DESC')->get();
 
         $excludePinnedIds = $pinned->pluck('note_id')->toArray();
-
+        $settingIds = $pinned->pluck('nsetting_id')->toArray();
         // Pin/Unpin items
+        //dd($pinned);
         $pinned = $pinned->map(function ($pin) {
             $pin->pinned = true;
+
+            // Process Caption
+            $content = NotesHelper::decrypt($pin->note_content);
+            $pin->note_caption = NotesHelper::fetchCaption($content);
+            
             return $pin;
         });
 
@@ -53,8 +60,15 @@ class NotesController extends Controller
                         ->get();
 
         // Pin/Unpin items
+
+
         $notes = $notes->each(function ($note) {
             $note->pinned = false;
+
+            // Process Caption
+            $content = NotesHelper::decrypt($note->note_content);
+            $note->note_caption = NotesHelper::fetchCaption($content);
+
             return $note;
         });
         $notes = $pinned->merge($notes);
@@ -62,12 +76,18 @@ class NotesController extends Controller
         return response()->json($notes);
     }
     
-    public function getNote(Request $request)
+    public function fetchSingle(Request $request)
     {
         $user_id = Auth::user()->id;
         $notes = Notes::GetNote($user_id, $request->id)
                         ->leftJoin('notes_settings_rel', 'notes_settings_rel.note_id', 'notes.note_id')
                         ->get();
+
+        $notes = $notes->each(function ($note) {
+            $note->note_content = NotesHelper::decrypt($note->note_content);
+            return $note;
+        });
+
         return response()->json($notes);
     }
 
@@ -84,14 +104,12 @@ class NotesController extends Controller
 
         $note = new Notes;
         $note->note_title = 'Title your note';
-        $note->note_content = '<h1><span style="color: #3598db;">Title your note</span></h1><p>Here\'s your paragraph</p>';
-        $note->note_caption = 'Here\'s your paragraph';
+        $note->note_content = NotesHelper::encrypt('Here\'s your paragraph');
         if ($note->save()) {
             $note_rel = new NotesRel;
             $note_rel->note_id = $note->note_id;
             $note_rel->user_id = $user_id;
             $note_rel->permission = 'admin';
-            $note_rel->order = 0;
             $note_rel->save();
         }
     }
@@ -139,6 +157,7 @@ class NotesController extends Controller
     public function update(Request $request)
     {
     	$this->validate($request, [
+            'type' => ["required" , "max:25", "regex:(title|content)"],
             'page_id' => 'required|integer',
         ]);
 
@@ -149,11 +168,14 @@ class NotesController extends Controller
                         ['notes_rel.user_id','=', $user_id]
                     ])
                     ->first();
+                    
+        if ($request->type == 'title') {
+            $note->note_title = $request->title;
+        }
+        if ($request->type == 'content') {
+            $note->note_content = NotesHelper::encrypt($request->content);
+        }
 
-        $notes_helper = (new NotesHelper)->processContent($request);
-        $note->note_title = $notes_helper['title'];
-        $note->note_content = $notes_helper['content'];
-        $note->note_caption = $notes_helper['caption'];
         if ($note->save()) {
             return response()->json(array('success' => true));
         }

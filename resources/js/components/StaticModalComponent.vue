@@ -16,6 +16,10 @@
                     <div class="form-group" v-if="item.type != 'checkbox'">
                             <label>{{item.name}}</label>
                             <input id="email" :type="item.type" :placeholder="item.placeholder" class="form-control" :name="item.name" :value="item.value" v-model="getValue[index]">
+
+                            <span v-if="errors.hasErrors" class="invalid-feedback block" role="alert">
+                                <span>{{errors.errorText[index]}}</span>
+                            </span>
                     </div>
 
                     <div class="form-check" v-if="item.type == 'checkbox'">
@@ -23,6 +27,9 @@
                         <label class="form-check-label" :for="item.name">
                             {{item.name}}
                         </label>
+                        <span v-if="errors.hasErrors" class="invalid-feedback block" role="alert">
+                            <span>{{errors.errorText[index]}}</span>
+                        </span>
                     </div>
                 </div>
 
@@ -46,7 +53,11 @@
                 showModal: true,
                 enableModalInput: false,
                 modalInput: '',
-                getValue: []
+                getValue: [],
+                errors: {
+                    hasErrors: false,
+                    errorText: []
+                }
             }
         },
         methods: {
@@ -57,7 +68,13 @@
                 });
                 this.$http.post('/settings/account/destroy', {fields: this.inputs,_token: window.Laravel['csrfToken']})
                 .then(function(response) {
-                    console.log(response);
+                    console.log(response.data.error);
+                    if (response.data.error.length > 0) {
+                        this.errors.hasErrors = true;
+                        response.data.error.forEach(function(row,index) {
+                            self.errors.errorText[row.field] = row.message;
+                        });
+                    }
                 });
 
             }

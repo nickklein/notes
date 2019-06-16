@@ -2,6 +2,7 @@
 
 namespace notes\Providers;
 
+use Laravel\Passport\Passport;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 
@@ -13,7 +14,7 @@ class AuthServiceProvider extends ServiceProvider
      * @var array
      */
     protected $policies = [
-        // 'notes\Model' => 'notes\Policies\ModelPolicy',
+        'notes\Model' => 'notes\Policies\ModelPolicy',
     ];
 
     /**
@@ -26,5 +27,6 @@ class AuthServiceProvider extends ServiceProvider
         $this->registerPolicies();
 
         //
+        Passport::routes();
     }
 }

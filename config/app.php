@@ -174,7 +174,7 @@ return [
         // notes\Providers\BroadcastServiceProvider::class,
         notes\Providers\EventServiceProvider::class,
         notes\Providers\RouteServiceProvider::class,
-
+        Laravel\Passport\PassportServiceProvider::class,
     ],
 
     /*

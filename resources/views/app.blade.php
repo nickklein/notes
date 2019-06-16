@@ -41,11 +41,15 @@
             </div>
         </header>
 
-        <div class="tags">
-            <notes-tags></notes-tags>
-        </div>
         <div class="notes-container">
+
+
+                <div class="tags">
+                    <notes-tags></notes-tags>
+                </div>
+
             <div class="content">
+                <notes-title></notes-title>
                 <notes-tinymce></notes-tinymce>
             </div>
         </div>

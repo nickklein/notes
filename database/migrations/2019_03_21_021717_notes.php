@@ -18,7 +18,6 @@ class Notes extends Migration
             $table->bigIncrements('note_id');
             $table->string('note_title', 255);
             $table->text('note_content');
-            $table->string('note_caption', 500);
             $table->tinyInteger('published')->unsigned()->default(0);
             $table->timestamps();
         });

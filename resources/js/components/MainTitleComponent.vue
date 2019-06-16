@@ -1,6 +1,6 @@
 <template>
         <div>
-            <textarea  class="title" v-on:keydown="saveContent" v-model="title"></textarea>
+            <input class="title" placeholder="This is your title" @input="saveContent" v-model="title"/>
         </div>
 </template>
 
@@ -18,13 +18,17 @@
             fetch: function(pageid) {
                 this.$http.get('/api/note/' + pageid)
                 .then(function(response) {
-                    console.log(response);
                     this.title = response.data[0].note_title;
                 });
             },
-            saveContent: function() {
-                this.$http.post('/api/notes/update', {page_id: pageid, title: this.title,_token: window.Laravel['csrfToken']});
-            }
+            saveContent: _.debounce(function () {
+                this.$http.post('/api/notes/update', {
+                    type: 'title',
+                    page_id: pageid, 
+                    title: this.title,
+                    _token: window.Laravel['csrfToken']
+                });
+            }, 500)
         },
         created: function() {
             this.fetch(pageid);
