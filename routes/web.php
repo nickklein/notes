@@ -25,3 +25,6 @@ Route::patch('/settings/account/update', 'AccountController@updateAccount')->nam
 Route::post('/settings/account/destroy', 'AccountController@destroyAccount')->name('settings/account/destroy');
 Route::get('/settings/password', 'AccountController@password')->name('settings/password');
 Route::patch('/settings/password/update', 'AccountController@updatePassword')->name('settings/password/update');
+
+Route::get('/settings/api', 'AccountController@api')->name('settings/api');
+

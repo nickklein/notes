@@ -23,7 +23,7 @@ class TagsController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
-    public function single(Request $request)
+    public function fetchSingle(Request $request)
     {
         //
         $user_id = Auth::user()->id;
@@ -35,15 +35,15 @@ class TagsController extends Controller
 
     }
 
-    public function getMyTags()
-    {
-        $user_id = Auth::user()->id;
-        $tag_rel = TagsRel::with('tags')
-                    ->where('user_id', $user_id)
-                    ->get();
-        return initTags::collection($tag_rel);
+    // public function fetchAll()
+    // {
+    //     $user_id = Auth::user()->id;
+    //     $tag_rel = TagsRel::with('tags')
+    //                 ->where('user_id', $user_id)
+    //                 ->get();
+    //     return initTags::collection($tag_rel);
 
-    }
+    // }
 
 
     /**

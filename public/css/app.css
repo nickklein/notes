@@ -3540,6 +3540,10 @@ input[type=password] {
   background: #FCFCFC;
 }
 
+.invalid-feedback.block {
+  display: block;
+}
+
 #app {
   height: 100%;
 }

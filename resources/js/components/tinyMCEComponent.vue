@@ -5,7 +5,8 @@
         @input="saveContent"
         :init="{
         branding: false, 
-        height: '500px', 
+        height: '500px',
+        inline: false,
         menubar: false,
         mobile: {
             theme: 'silver'
@@ -47,7 +48,12 @@ export default {
             });
         },
         saveContent: _.debounce(function () {
-            this.$http.post('/api/notes/update', {page_id: pageid, content: this.content,_token: window.Laravel['csrfToken']});
+            this.$http.post('/api/notes/update', {
+                type: 'content',
+                page_id: pageid, 
+                content: this.content,
+                _token: window.Laravel['csrfToken']
+            });
             bus.$emit('filterSidebar', '');
         }, 500)
     },

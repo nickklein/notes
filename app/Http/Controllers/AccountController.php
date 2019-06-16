@@ -60,7 +60,7 @@ class AccountController extends Controller
                 $user->delete();
                 return response()->json(array('success' => true, 'message' => 'record deleted'));
             }
-            return response()->json(array('success' => false, 'message' => 'The email address does not match our records', 'field' => [0]));
+            return response()->json(array('success' => false, 'error' => [['field' => 0, 'message' => 'The email address does not match our records']]));
         }
         return response()->json(array('success' => false, 'message' => 'field not found'));
     }
@@ -89,5 +89,9 @@ class AccountController extends Controller
 	    $user->save();
 		
         return back()->withInput()->withSuccess('You have successfully changed your password');
+    }
+
+    public function api() {
+        return view('settings.api');
     }
 }

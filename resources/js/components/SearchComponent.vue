@@ -1,7 +1,6 @@
 <template>
         <header class="search">
                 <input type="text" name="search" id="search" v-on:keyup="signalChange"/>
-                <tags-sidebar></tags-sidebar>
         </header>
 </template>
 

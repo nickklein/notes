@@ -1,3 +1,9 @@
 input[type="email"],  input[type="password"] {
     background: $sidebar-bg;
 }
+
+.invalid-feedback {
+    &.block {
+        display: block;
+    }
+}

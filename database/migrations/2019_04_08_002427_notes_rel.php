@@ -19,7 +19,6 @@ class NotesRel extends Migration
             $table->bigInteger('note_id')->unsigned();
             $table->smallInteger('user_id')->unsigned();
             $table->string('permission', 50)->default('none');
-            $table->tinyInteger('order')->unsigned()->default(0);
         });
     }
 
