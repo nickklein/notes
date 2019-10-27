@@ -1,6 +1,17 @@
+html, body {
+    height: 100%;
+}
+
 #app {
     height: 100%;
-    .container-fluid, .container-fluid .container-row, .sidebar-container, .sidebar, .notes-container, .notes-container .content, .notes-container .editor {
+    .container-fluid, 
+    .container-fluid .container-row, 
+    .sidebar-container, 
+    .sidebar, .notes-container, 
+    .notes-container .content, 
+    .notes-container .editor,
+    .main-wrap
+    {
         height: 100%;
     }
 }
@@ -184,6 +195,7 @@
                 display: inline-block;
                 margin: 10px;
                 a {
+                    fill: #727272;
                     display: block;
                     height: 23px;
                     width: 23px;
@@ -243,6 +255,9 @@
     }
 
     .notes-container {
+        display: flex;
+        flex-direction: column;
+
         .title {
             width: 100%;
             border: none;
@@ -257,6 +272,12 @@
             .tox-edit-area {
                 border-top: none;
             }
+        }
+        .editor__content, .ProseMirror {
+            height: 100%;
+        }
+        .ProseMirror {
+            overflow-y: auto;
         }
     }
 

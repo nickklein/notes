@@ -77,3 +77,28 @@ nav {
         }
     }        
 }
+
+.sign-through-provider {
+    padding: 0;
+    li {
+        margin: 1em  0em;
+        list-style-type: none;
+        a {
+            padding: 0.5em !important;
+        }
+        .google {
+            .icon {
+                background: url('https://d2k1ftgv7pobq7.cloudfront.net/meta/c/p/res/images/8215f6659adc202403198fef903a447e/sign-in-with-google.svg') 12px 50% no-repeat;
+                display: inline-block;
+                border-radius: 1px;
+                vertical-align: middle;
+                width: 42px;
+                height: 42px;
+            }
+            background: #fff;
+            color: #717171;
+            border: 2px #CDD2D4 solid;
+        }
+
+    }
+}

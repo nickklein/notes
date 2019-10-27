@@ -37,7 +37,8 @@ Vue.component('notes-tags', require('./components/MainTagsComponent.vue').defaul
 Vue.component('create-note', require('./components/CreateNoteComponent.vue').default);
 Vue.component('notes-toolbar', require('./components/ToolbarComponent.vue').default);
 Vue.component('notes-title', require('./components/MainTitleComponent.vue').default);
-Vue.component('notes-tinymce', require('./components/tinyMCEComponent.vue').default);
+Vue.component('notes-tiptap', require('./components/tiptapComponent.vue').default);
+//Vue.component('notes-tinymce', require('./components/tinyMCEComponent.vue').default);
 Vue.component('static-modal', require('./components/StaticModalComponent.vue').default);
 
 
