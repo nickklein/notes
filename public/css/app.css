@@ -172,13 +172,13 @@ sup {
 }
 
 a {
-  color: #007bff;
+  color: #298DD6;
   text-decoration: none;
   background-color: transparent;
 }
 
 a:hover {
-  color: #0056b3;
+  color: #1d6396;
   text-decoration: underline;
 }
 
@@ -2735,12 +2735,12 @@ fieldset:disabled a.btn {
 
 .btn-link {
   font-weight: 400;
-  color: #007bff;
+  color: #298DD6;
   text-decoration: none;
 }
 
 .btn-link:hover {
-  color: #0056b3;
+  color: #1d6396;
   text-decoration: underline;
 }
 
@@ -3445,6 +3445,10 @@ a:hover {
   overflow: hidden;
 }
 
+.btn-primary {
+  background-color: #298DD6;
+}
+
 .btn-full-width {
   width: 100%;
 }
@@ -3544,6 +3548,11 @@ input[type=password] {
   display: block;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 #app {
   height: 100%;
 }
@@ -3554,7 +3563,8 @@ input[type=password] {
 #app .sidebar,
 #app .notes-container,
 #app .notes-container .content,
-#app .notes-container .editor {
+#app .notes-container .editor,
+#app .main-wrap {
   height: 100%;
 }
 
@@ -3808,6 +3818,7 @@ input[type=password] {
 }
 
 .main-wrap .toolbar .left-tools li a {
+  fill: #727272;
   display: block;
   height: 23px;
   width: 23px;
@@ -3871,6 +3882,11 @@ input[type=password] {
   border: none !important;
 }
 
+.main-wrap .notes-container {
+  display: flex;
+  flex-direction: column;
+}
+
 .main-wrap .notes-container .title {
   width: 100%;
   border: none;
@@ -3887,6 +3903,15 @@ input[type=password] {
 
 .main-wrap .notes-container .tox-tinymce .tox-edit-area {
   border-top: none;
+}
+
+.main-wrap .notes-container .editor__content,
+.main-wrap .notes-container .ProseMirror {
+  height: 100%;
+}
+
+.main-wrap .notes-container .ProseMirror {
+  overflow-y: auto;
 }
 
 nav {
@@ -3994,5 +4019,33 @@ nav #navigation li {
   display: block;
   padding: 0.5em 1em;
   background: #FCFCFC;
+}
+
+.sign-through-provider {
+  padding: 0;
+}
+
+.sign-through-provider li {
+  margin: 1em 0em;
+  list-style-type: none;
+}
+
+.sign-through-provider li a {
+  padding: 0.5em !important;
+}
+
+.sign-through-provider li .google {
+  background: #fff;
+  color: #717171;
+  border: 2px #CDD2D4 solid;
+}
+
+.sign-through-provider li .google .icon {
+  background: url("https://d2k1ftgv7pobq7.cloudfront.net/meta/c/p/res/images/8215f6659adc202403198fef903a447e/sign-in-with-google.svg") 12px 50% no-repeat;
+  display: inline-block;
+  border-radius: 1px;
+  vertical-align: middle;
+  width: 42px;
+  height: 42px;
 }
 
