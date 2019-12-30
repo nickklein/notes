@@ -31,15 +31,15 @@ Vue.http.interceptors.push((request, next) => {
 // files.keys().map(key => Vue.component(key.split('/').pop().split('.')[0], files(key).default));
 
 //Vue.component('example-component', require('./components/ExampleComponent.vue').default);
-Vue.component('search-sidebar', require('./components/SearchComponent.vue').default);
-Vue.component('notes-sidebar', require('./components/NotesSidebarComponent.vue').default);
-Vue.component('notes-tags', require('./components/MainTagsComponent.vue').default);
-Vue.component('create-note', require('./components/CreateNoteComponent.vue').default);
-Vue.component('notes-toolbar', require('./components/ToolbarComponent.vue').default);
-Vue.component('notes-title', require('./components/MainTitleComponent.vue').default);
-Vue.component('notes-tiptap', require('./components/tiptapComponent.vue').default);
-//Vue.component('notes-tinymce', require('./components/tinyMCEComponent.vue').default);
-Vue.component('static-modal', require('./components/StaticModalComponent.vue').default);
+Vue.component('notes-sidebar-search', require('./components/SidebarSearch.vue').default);
+Vue.component('notes-sidebar-notes', require('./components/SidebarNotes.vue').default);
+Vue.component('notes-main-tags', require('./components/MainTags.vue').default);
+Vue.component('create-note', require('./components/CreateNote.vue').default);
+Vue.component('notes-main-toolbar', require('./components/MainToolbar.vue').default);
+Vue.component('notes-main-title', require('./components/MainTitle.vue').default);
+Vue.component('notes-main-tiptap', require('./components/tipTap.vue').default);
+//Vue.component('notes-tinymce', require('./components/tinyMCE.vue').default);
+Vue.component('static-modal', require('./components/StaticModal.vue').default);
 
 
 // Passport
