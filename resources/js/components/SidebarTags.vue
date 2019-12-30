@@ -14,7 +14,7 @@
 
 
     export default {
-        name: 'tags-sidebar',
+        name: 'notes-sidebar-tags',
         data() {
             return {
                 items: [],

@@ -30,7 +30,7 @@
     import {bus} from '../app';
 
     export default {
-        name: 'notes-toolbar',
+        name: 'notes-main-toolbar',
         data() {
             return {
                 activePin: false,

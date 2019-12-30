@@ -15,7 +15,7 @@ import {bus} from '../app';
 
 
 export default {
-	name: 'notes-tags',
+	name: 'notes-main-tags',
 	components: {
 		VueTagsInput
 	},
