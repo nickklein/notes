@@ -1,6 +1,6 @@
 <template>
-    <div class="col-xl-10 col-md-10 col-sm-8">
-        <div class="mobile-menu row">
+    <div>
+        <div class="mobile-menu">
             <ul class="back-menu">
                 <li>
                     <a href="#" title="Favourite" v-on:click="back">
@@ -17,7 +17,7 @@
             </ul>
 
         </div>
-        <ul class="left-tools col-xl-10 col-md-10 ">
+        <ul class="left-tools">
             <li><a href="#"><svg width="32" height="32" viewBox="0 0 32 32"><path d="M14 9.5c0-0.825 0.675-1.5 1.5-1.5h1c0.825 0 1.5 0.675 1.5 1.5v1c0 0.825-0.675 1.5-1.5 1.5h-1c-0.825 0-1.5-0.675-1.5-1.5v-1z"></path><path d="M20 24h-8v-2h2v-6h-2v-2h6v8h2z"></path><path d="M16 0c-8.837 0-16 7.163-16 16s7.163 16 16 16 16-7.163 16-16-7.163-16-16-16zM16 29c-7.18 0-13-5.82-13-13s5.82-13 13-13 13 5.82 13 13-5.82 13-13 13z"></path></svg></a></li>
             <li><a href="#" v-on:click="pin" :title="titlePin" :class="{active: activePin}"><svg width="32" height="32" viewBox="0 0 32 32"><path d="M17 0l-3 3 3 3-7 8h-7l5.5 5.5-8.5 11.269v1.231h1.231l11.269-8.5 5.5 5.5v-7l8-7 3 3 3-3-15-15zM14 17l-2-2 7-7 2 2-7 7z"></path></svg></a></li>
             <li><a href="#" v-on:click="remove"><svg width="32" height="32" viewBox="0 0 32 32"><path d="M4 10v20c0 1.1 0.9 2 2 2h18c1.1 0 2-0.9 2-2v-20h-22zM10 28h-2v-14h2v14zM14 28h-2v-14h2v14zM18 28h-2v-14h2v14zM22 28h-2v-14h2v14z"></path><path d="M26.5 4h-6.5v-2.5c0-0.825-0.675-1.5-1.5-1.5h-7c-0.825 0-1.5 0.675-1.5 1.5v2.5h-6.5c-0.825 0-1.5 0.675-1.5 1.5v2.5h26v-2.5c0-0.825-0.675-1.5-1.5-1.5zM18 4h-6v-1.975h6v1.975z"></path></svg></a></li>

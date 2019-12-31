@@ -9,7 +9,7 @@
             <notes-sidebar-notes></notes-sidebar-notes>
 </aside>
 <main class="main-wrapper">
-        <header class="toolbar row">
+        <header class="toolbar">
             <notes-main-toolbar></notes-main-toolbar>
 
             <div class="account">
@@ -37,13 +37,7 @@
         </header>
 
         <div class="notes-container">
-            <div class="content">
-                <div class="tags">
-                    <notes-main-tags></notes-main-tags>
-                </div>
-                <notes-main-title></notes-main-title>
-                <notes-main-tiptap></notes-main-tiptap>
-            </div>
+            <notes-main-tiptap></notes-main-tiptap>
         </div>
 </main>
 @endsection

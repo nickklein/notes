@@ -63711,8 +63711,8 @@ var render = function() {
   var _vm = this
   var _h = _vm.$createElement
   var _c = _vm._self._c || _h
-  return _c("div", { staticClass: "col-xl-10 col-md-10 col-sm-8" }, [
-    _c("div", { staticClass: "mobile-menu row" }, [
+  return _c("div", [
+    _c("div", { staticClass: "mobile-menu" }, [
       _c("ul", { staticClass: "back-menu" }, [
         _c("li", [
           _c(
@@ -63831,7 +63831,7 @@ var render = function() {
       ])
     ]),
     _vm._v(" "),
-    _c("ul", { staticClass: "left-tools col-xl-10 col-md-10 " }, [
+    _c("ul", { staticClass: "left-tools" }, [
       _c("li", [
         _c("a", { attrs: { href: "#" } }, [
           _c(
