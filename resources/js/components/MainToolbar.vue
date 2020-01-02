@@ -1,5 +1,5 @@
 <template>
-    <div>
+    <div class="col-xl-9 col-lg-6 col-md-6 col-sm-6">
         <div class="mobile-menu">
             <ul class="back-menu">
                 <li>
