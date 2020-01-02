@@ -5,11 +5,11 @@
 @section('content')
 
 <aside class="sidebar-wrapper">
-            <notes-sidebar-search></notes-sidebar-search>
-            <notes-sidebar-notes></notes-sidebar-notes>
+    <notes-sidebar-search></notes-sidebar-search>
+    <notes-sidebar-notes></notes-sidebar-notes>
 </aside>
 <main class="main-wrapper">
-        <header class="toolbar">
+        <header class="toolbar row">
             <notes-main-toolbar></notes-main-toolbar>
 
             <div class="account">
@@ -36,8 +36,13 @@
             </div>
         </header>
 
-        <div class="notes-container">
-            <notes-main-tiptap></notes-main-tiptap>
+        <div class="tags">
+            <notes-main-tags></notes-main-tags>
         </div>
+
+        <div class="notes-container">
+           <notes-main-tiptap></notes-main-tiptap>
+        </div>
+        <create-note></create-note>
 </main>
 @endsection

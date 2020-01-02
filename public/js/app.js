@@ -2064,14 +2064,14 @@ __webpack_require__.r(__webpack_exports__);
       var note_id = event.currentTarget.getAttribute('note_id');
       pageid = note_id;
       history.pushState(null, '', '/app#' + note_id);
+      console.log(note_id);
       _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$emit('updateComponents', note_id);
-      this.selected = note_id;
-      var sidebarContainer = document.querySelector('.sidebar-container');
-      var mainWrap = document.querySelector('.main-wrap');
-      sidebarContainer.classList.remove('slideInSidebar');
-      sidebarContainer.classList.add('slideOutSidebar');
-      mainWrap.classList.remove('slideOutMain');
-      mainWrap.classList.add('slideInMain');
+      this.selected = note_id; //var sidebarContainer = document.querySelector('.sidebar-container');
+      //var mainWrap = document.querySelector('.main-wrap');
+      //sidebarContainer.classList.remove('slideInSidebar');
+      //sidebarContainer.classList.add('slideOutSidebar');
+      //mainWrap.classList.remove('slideOutMain');
+      //mainWrap.classList.add('slideInMain');
     }
   },
   created: function created() {
@@ -2225,7 +2225,8 @@ __webpack_require__.r(__webpack_exports__);
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var tiptap__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! tiptap */ "./node_modules/tiptap/dist/tiptap.esm.js");
-/* harmony import */ var tiptap_extensions__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! tiptap-extensions */ "./node_modules/tiptap-extensions/dist/extensions.esm.js");
+/* harmony import */ var _app__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../app */ "./resources/js/app.js");
+/* harmony import */ var tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! tiptap-extensions */ "./node_modules/tiptap-extensions/dist/extensions.esm.js");
 //
 //
 //
@@ -2352,6 +2353,8 @@ __webpack_require__.r(__webpack_exports__);
 //
 //
 //
+//
+
 
 
 /* harmony default export */ __webpack_exports__["default"] = ({
@@ -2362,15 +2365,51 @@ __webpack_require__.r(__webpack_exports__);
   data: function data() {
     return {
       editor: new tiptap__WEBPACK_IMPORTED_MODULE_0__["Editor"]({
-        extensions: [new tiptap_extensions__WEBPACK_IMPORTED_MODULE_1__["Blockquote"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_1__["BulletList"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_1__["CodeBlock"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_1__["HardBreak"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_1__["Heading"]({
+        extensions: [new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["Blockquote"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["BulletList"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["CodeBlock"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["HardBreak"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["Heading"]({
           levels: [1, 2, 3]
-        }), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_1__["HorizontalRule"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_1__["ListItem"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_1__["OrderedList"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_1__["TodoItem"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_1__["TodoList"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_1__["Link"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_1__["Bold"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_1__["Code"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_1__["Italic"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_1__["Strike"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_1__["Underline"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_1__["History"]()],
-        content: "\n\n\n<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque sit amet diam non odio suscipit blandit sed eu ex. Nunc tempor rutrum laoreet. Phasellus fringilla facilisis sodales. Nam vitae turpis sodales, gravida mauris ac, imperdiet enim. Nam congue felis nulla, sed placerat libero varius vel. Nullam pretium gravida est id auctor. Vestibulum a gravida dui. Fusce porttitor orci et est sollicitudin, id euismod ligula fermentum. Fusce diam massa, molestie ut libero et, tempus imperdiet tortor. Donec ullamcorper vehicula augue id finibus. Vivamus convallis tellus purus, vitae vehicula dui volutpat id. Donec id feugiat ipsum. Vivamus et ornare lacus, at faucibus mauris.</p>\n\n<p>Pellentesque lectus sem, efficitur eget sagittis sed, placerat nec felis. Sed nec vulputate velit, vel tincidunt massa. Nam mollis cursus metus, at dictum neque finibus a. Duis cursus ultrices libero, venenatis malesuada magna pharetra vitae. Vestibulum velit velit, tristique vitae venenatis vel, mollis eget sapien. Nullam vel urna vel nisl faucibus egestas. Praesent tempus maximus felis, id sagittis sem pellentesque non. Quisque vulputate sem vel est tincidunt fermentum. Pellentesque porta in turpis vel rhoncus. Aenean ac nisl quis sem interdum aliquam semper nec mi. Nullam viverra quam eget lobortis dapibus.</p>\n\n<p>Fusce convallis nisl ornare elit tincidunt, quis elementum turpis mattis. Sed ut purus ligula. Duis commodo, diam varius accumsan sodales, elit dui consectetur augue, et elementum purus ante eget tortor. In nec nisi commodo, maximus urna eu, egestas eros. Etiam nec nisi vitae dui volutpat facilisis ac non odio. Etiam congue congue libero ac molestie. Nunc porta imperdiet felis rutrum ornare. Vivamus efficitur ac ex quis volutpat. Nulla nec arcu justo.</p>\n\n<p>Nam ac lacus id velit dictum sollicitudin at tempus dolor. Mauris laoreet rutrum elementum. Aenean laoreet eros sit amet orci dignissim pharetra. Ut suscipit sodales erat, nec ornare libero ullamcorper sit amet. Maecenas sollicitudin nisl tortor, eget tristique purus aliquet vel. Donec porttitor, lorem et vehicula suscipit, justo dui placerat sapien, at auctor dolor tellus vel sem. Vivamus at felis id purus faucibus interdum. Fusce ac ipsum at erat iaculis tempus. Aliquam erat volutpat. Maecenas et elementum risus. Maecenas laoreet aliquet sem. Ut eu finibus nisl. Nunc id erat sed ex tincidunt egestas nec at odio. Donec in consequat nibh.</p>\n\n<p>Morbi vulputate nunc ut imperdiet convallis. Fusce aliquet facilisis tellus ac dictum. Mauris bibendum malesuada urna. Sed egestas est urna, in condimentum justo commodo ac. Vestibulum auctor et justo vel consequat. Ut vel nisi et purus hendrerit maximus luctus vitae dolor. In ac nibh id ligula accumsan dictum. \n        "
+        }), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["HorizontalRule"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["ListItem"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["OrderedList"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["TodoItem"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["TodoList"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["Link"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["Bold"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["Code"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["Italic"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["Strike"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["Underline"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["History"]()],
+        content: '',
+        onUpdate: _.debounce(function (_ref) {
+          var state = _ref.state,
+              getHTML = _ref.getHTML,
+              getJSON = _ref.getJSON,
+              transaction = _ref.transaction;
+          _app__WEBPACK_IMPORTED_MODULE_1__["bus"].$http.post('/api/notes/update', {
+            type: 'content',
+            page_id: pageid,
+            content: getHTML(),
+            _token: window.Laravel['csrfToken']
+          });
+          _app__WEBPACK_IMPORTED_MODULE_1__["bus"].$emit('filterSidebar', '');
+        }, 1000)
       })
     };
   },
   beforeDestroy: function beforeDestroy() {
     this.editor.destroy();
+  },
+  methods: {
+    fetch: function fetch(pageid) {
+      var self = this;
+      this.$http.get('/api/note/' + pageid).then(function (response) {
+        var activePin = false;
+
+        if (response.data[0].nsetting_id !== null && response.data[0].nsetting_id == '2') {
+          activePin = true;
+        }
+
+        _app__WEBPACK_IMPORTED_MODULE_1__["bus"].$emit('activePin', activePin);
+        self.editor.setContent(response.data[0].note_content);
+      });
+    }
+  },
+  created: function created() {
+    var _this = this;
+
+    this.fetch(pageid);
+    _app__WEBPACK_IMPORTED_MODULE_1__["bus"].$on('updateComponents', function (newid) {
+      _this.fetch(newid);
+    });
   }
 });
 
@@ -63711,7 +63750,7 @@ var render = function() {
   var _vm = this
   var _h = _vm.$createElement
   var _c = _vm._self._c || _h
-  return _c("div", [
+  return _c("div", { staticClass: "col-xl-9 col-lg-6 col-md-6 col-sm-6" }, [
     _c("div", { staticClass: "mobile-menu" }, [
       _c("ul", { staticClass: "back-menu" }, [
         _c("li", [
@@ -64369,149 +64408,8 @@ var render = function() {
     "div",
     { staticClass: "editor" },
     [
-      _c("editor-menu-bar", {
-        attrs: { editor: _vm.editor },
-        scopedSlots: _vm._u([
-          {
-            key: "default",
-            fn: function(ref) {
-              var commands = ref.commands
-              var isActive = ref.isActive
-              return [
-                _c("div", { staticClass: "menubar" }, [
-                  _c(
-                    "button",
-                    {
-                      staticClass: "menubar__button",
-                      class: { "is-active": isActive.bold() },
-                      on: { click: commands.bold }
-                    },
-                    [_vm._v("\n      Bold\n      ")]
-                  ),
-                  _vm._v(" "),
-                  _c(
-                    "button",
-                    {
-                      staticClass: "menubar__button",
-                      class: { "is-active": isActive.italic() },
-                      on: { click: commands.italic }
-                    },
-                    [_vm._v("\n      Italic\n      ")]
-                  ),
-                  _vm._v(" "),
-                  _c("button", {
-                    staticClass: "menubar__button",
-                    class: { "is-active": isActive.strike() },
-                    on: { click: commands.strike }
-                  }),
-                  _vm._v(" "),
-                  _c("button", {
-                    staticClass: "menubar__button",
-                    class: { "is-active": isActive.underline() },
-                    on: { click: commands.underline }
-                  }),
-                  _vm._v(" "),
-                  _c("button", {
-                    staticClass: "menubar__button",
-                    class: { "is-active": isActive.code() },
-                    on: { click: commands.code }
-                  }),
-                  _vm._v(" "),
-                  _c("button", {
-                    staticClass: "menubar__button",
-                    class: { "is-active": isActive.paragraph() },
-                    on: { click: commands.paragraph }
-                  }),
-                  _vm._v(" "),
-                  _c(
-                    "button",
-                    {
-                      staticClass: "menubar__button",
-                      class: { "is-active": isActive.heading({ level: 1 }) },
-                      on: {
-                        click: function($event) {
-                          return commands.heading({ level: 1 })
-                        }
-                      }
-                    },
-                    [_vm._v("\n        H1\n      ")]
-                  ),
-                  _vm._v(" "),
-                  _c(
-                    "button",
-                    {
-                      staticClass: "menubar__button",
-                      class: { "is-active": isActive.heading({ level: 2 }) },
-                      on: {
-                        click: function($event) {
-                          return commands.heading({ level: 2 })
-                        }
-                      }
-                    },
-                    [_vm._v("\n        H2\n      ")]
-                  ),
-                  _vm._v(" "),
-                  _c(
-                    "button",
-                    {
-                      staticClass: "menubar__button",
-                      class: { "is-active": isActive.heading({ level: 3 }) },
-                      on: {
-                        click: function($event) {
-                          return commands.heading({ level: 3 })
-                        }
-                      }
-                    },
-                    [_vm._v("\n        H3\n      ")]
-                  ),
-                  _vm._v(" "),
-                  _c("button", {
-                    staticClass: "menubar__button",
-                    class: { "is-active": isActive.bullet_list() },
-                    on: { click: commands.bullet_list }
-                  }),
-                  _vm._v(" "),
-                  _c("button", {
-                    staticClass: "menubar__button",
-                    class: { "is-active": isActive.ordered_list() },
-                    on: { click: commands.ordered_list }
-                  }),
-                  _vm._v(" "),
-                  _c("button", {
-                    staticClass: "menubar__button",
-                    class: { "is-active": isActive.blockquote() },
-                    on: { click: commands.blockquote }
-                  }),
-                  _vm._v(" "),
-                  _c("button", {
-                    staticClass: "menubar__button",
-                    class: { "is-active": isActive.code_block() },
-                    on: { click: commands.code_block }
-                  }),
-                  _vm._v(" "),
-                  _c("button", {
-                    staticClass: "menubar__button",
-                    on: { click: commands.horizontal_rule }
-                  }),
-                  _vm._v(" "),
-                  _c("button", {
-                    staticClass: "menubar__button",
-                    on: { click: commands.undo }
-                  }),
-                  _vm._v(" "),
-                  _c("button", {
-                    staticClass: "menubar__button",
-                    on: { click: commands.redo }
-                  })
-                ])
-              ]
-            }
-          }
-        ])
-      }),
-      _vm._v(" "),
       _c("editor-content", {
-        staticClass: "editor__content",
+        staticClass: "editor__content dasd",
         attrs: { editor: _vm.editor }
       })
     ],

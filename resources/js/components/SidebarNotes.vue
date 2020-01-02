@@ -36,18 +36,18 @@
                 pageid = note_id;
 
                 history.pushState(null, '', '/app#' + note_id);
-
+                console.log(note_id);
                 bus.$emit('updateComponents', note_id);
 
                 this.selected = note_id;                
                 
-                var sidebarContainer = document.querySelector('.sidebar-container');
-                var mainWrap = document.querySelector('.main-wrap');
+                //var sidebarContainer = document.querySelector('.sidebar-container');
+                //var mainWrap = document.querySelector('.main-wrap');
 
-                sidebarContainer.classList.remove('slideInSidebar');
-                sidebarContainer.classList.add('slideOutSidebar');
-                mainWrap.classList.remove('slideOutMain');
-                mainWrap.classList.add('slideInMain');
+                //sidebarContainer.classList.remove('slideInSidebar');
+                //sidebarContainer.classList.add('slideOutSidebar');
+                //mainWrap.classList.remove('slideOutMain');
+                //mainWrap.classList.add('slideInMain');
 
 
             }

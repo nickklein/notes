@@ -16,7 +16,7 @@ html, body {
 .sidebar-wrapper {
     display: flex;
     flex-direction: column;
-    width: 400px;
+    width: 350px;
     background: $sidebar-bg;
 
     ul, li {
@@ -44,7 +44,7 @@ html, body {
     }
 
     .notes {
-        overflow-y: scroll;
+        overflow-y: auto;
         margin-bottom: 0;
 
         a {
@@ -55,11 +55,11 @@ html, body {
             padding: 2.1em 1.2em;
             h5 {
                 font-size: 1em;
-                //font-weight: bold;
+                //font-weight: 600;
                 //margin-bottom: 1.2em;
             }
             p.caption {
-                font-size: 0.8em;
+                font-size: 1em;
                 color: $sidebar-notes-caption;
                 margin-bottom: 0;
                 line-height: 1.1em;
@@ -93,6 +93,7 @@ html, body {
 }
 
 .main-wrapper {
+    position: relative;
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
@@ -133,7 +134,7 @@ html, body {
                 display: inline-block;
                 margin: 10px;
                 a {
-                    fill: #727272;
+                    fill: #000;
                     display: block;
                     height: 23px;
                     width: 23px;
@@ -182,6 +183,24 @@ html, body {
             }
         }
     }
+    /* Tags */
+    .tags {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        background: #fff;
+        .vue-tags-input {
+            width: 100%;
+            max-width: 100%;
+        }
+        .ti-tag {
+            background-color: #298DD6  !important;
+        }
+        .ti-input {
+            border: none !important;
+        }
+    }
+
     .notes-container {
         margin: 1.5em;
         position: relative;
@@ -196,7 +215,7 @@ html, body {
         left: 0;
         display: flex;
         flex-direction: column;
-        overflow-y: scroll;
+        overflow-y: auto;
         height: 100%;
         width: 100%;
     }

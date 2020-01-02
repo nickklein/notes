@@ -1,6 +1,7 @@
 <template>
   <div class="editor">
-    <editor-menu-bar :editor="editor" v-slot="{ commands, isActive }">
+    
+    <!-- <editor-menu-bar :editor="editor" v-slot="{ commands, isActive }">
       <div class="menubar">
 
         <button
@@ -118,14 +119,16 @@
         </button>
 
       </div>
-    </editor-menu-bar>
+    </editor-menu-bar> -->
 
-    <editor-content class="editor__content" :editor="editor" />
+    <editor-content class="editor__content dasd" :editor="editor" />
   </div>
 </template>
 
 <script>
 import { Editor, EditorContent, EditorMenuBar } from 'tiptap'
+import {bus} from '../app';
+
 import {
   Blockquote,
   CodeBlock,
@@ -173,24 +176,45 @@ export default {
           new Underline(),
           new History(),
         ],
-        content: `
+        content: '',
+        onUpdate: _.debounce(function({ state, getHTML, getJSON, transaction }) {
+          bus.$http.post('/api/notes/update', {
+              type: 'content',
+              page_id: pageid, 
+              content: getHTML(),
+              _token: window.Laravel['csrfToken']
+          });
+          bus.$emit('filterSidebar', '');
+        }, 1000),
 
-
-<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque sit amet diam non odio suscipit blandit sed eu ex. Nunc tempor rutrum laoreet. Phasellus fringilla facilisis sodales. Nam vitae turpis sodales, gravida mauris ac, imperdiet enim. Nam congue felis nulla, sed placerat libero varius vel. Nullam pretium gravida est id auctor. Vestibulum a gravida dui. Fusce porttitor orci et est sollicitudin, id euismod ligula fermentum. Fusce diam massa, molestie ut libero et, tempus imperdiet tortor. Donec ullamcorper vehicula augue id finibus. Vivamus convallis tellus purus, vitae vehicula dui volutpat id. Donec id feugiat ipsum. Vivamus et ornare lacus, at faucibus mauris.</p>
-
-<p>Pellentesque lectus sem, efficitur eget sagittis sed, placerat nec felis. Sed nec vulputate velit, vel tincidunt massa. Nam mollis cursus metus, at dictum neque finibus a. Duis cursus ultrices libero, venenatis malesuada magna pharetra vitae. Vestibulum velit velit, tristique vitae venenatis vel, mollis eget sapien. Nullam vel urna vel nisl faucibus egestas. Praesent tempus maximus felis, id sagittis sem pellentesque non. Quisque vulputate sem vel est tincidunt fermentum. Pellentesque porta in turpis vel rhoncus. Aenean ac nisl quis sem interdum aliquam semper nec mi. Nullam viverra quam eget lobortis dapibus.</p>
-
-<p>Fusce convallis nisl ornare elit tincidunt, quis elementum turpis mattis. Sed ut purus ligula. Duis commodo, diam varius accumsan sodales, elit dui consectetur augue, et elementum purus ante eget tortor. In nec nisi commodo, maximus urna eu, egestas eros. Etiam nec nisi vitae dui volutpat facilisis ac non odio. Etiam congue congue libero ac molestie. Nunc porta imperdiet felis rutrum ornare. Vivamus efficitur ac ex quis volutpat. Nulla nec arcu justo.</p>
-
-<p>Nam ac lacus id velit dictum sollicitudin at tempus dolor. Mauris laoreet rutrum elementum. Aenean laoreet eros sit amet orci dignissim pharetra. Ut suscipit sodales erat, nec ornare libero ullamcorper sit amet. Maecenas sollicitudin nisl tortor, eget tristique purus aliquet vel. Donec porttitor, lorem et vehicula suscipit, justo dui placerat sapien, at auctor dolor tellus vel sem. Vivamus at felis id purus faucibus interdum. Fusce ac ipsum at erat iaculis tempus. Aliquam erat volutpat. Maecenas et elementum risus. Maecenas laoreet aliquet sem. Ut eu finibus nisl. Nunc id erat sed ex tincidunt egestas nec at odio. Donec in consequat nibh.</p>
-
-<p>Morbi vulputate nunc ut imperdiet convallis. Fusce aliquet facilisis tellus ac dictum. Mauris bibendum malesuada urna. Sed egestas est urna, in condimentum justo commodo ac. Vestibulum auctor et justo vel consequat. Ut vel nisi et purus hendrerit maximus luctus vitae dolor. In ac nibh id ligula accumsan dictum. 
-        `,
       }),
     }
   },
   beforeDestroy() {
     this.editor.destroy()
   },
+  methods: {
+    fetch: function(pageid) {
+       var self = this;
+        this.$http.get('/api/note/' + pageid)
+        .then(function(response) {
+            var activePin = false;
+            if (response.data[0].nsetting_id !== null && response.data[0].nsetting_id == '2') {
+                activePin = true;
+            }
+            bus.$emit('activePin', activePin);
+            self.editor.setContent(response.data[0].note_content);
+        });
+    }
+  },
+  created() {
+      this.fetch(pageid);
+
+      bus.$on('updateComponents', (newid) => {
+          this.fetch(newid);
+      });
+  }
+
+
 }
 </script>
