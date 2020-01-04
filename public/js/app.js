@@ -2064,7 +2064,6 @@ __webpack_require__.r(__webpack_exports__);
       var note_id = event.currentTarget.getAttribute('note_id');
       pageid = note_id;
       history.pushState(null, '', '/app#' + note_id);
-      console.log(note_id);
       _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$emit('updateComponents', note_id);
       this.selected = note_id; //var sidebarContainer = document.querySelector('.sidebar-container');
       //var mainWrap = document.querySelector('.main-wrap');
@@ -2374,9 +2373,30 @@ __webpack_require__.r(__webpack_exports__);
               getHTML = _ref.getHTML,
               getJSON = _ref.getJSON,
               transaction = _ref.transaction;
+          var title,
+              titleRaw,
+              caption,
+              captionRaw = '';
+          var json = getJSON();
+
+          if (json.content.length) {
+            title = json.content.shift();
+            titleRaw = title.content[0].text;
+
+            if (json.content.length) {
+              caption = json.content.shift();
+
+              for (var i = 0; i < caption.content.length; i++) {
+                captionRaw += caption.content[i].text;
+              }
+            }
+          }
+
           _app__WEBPACK_IMPORTED_MODULE_1__["bus"].$http.post('/api/notes/update', {
             type: 'content',
             page_id: pageid,
+            title: titleRaw,
+            caption: captionRaw,
             content: getHTML(),
             _token: window.Laravel['csrfToken']
           });

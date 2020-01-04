@@ -178,9 +178,24 @@ export default {
         ],
         content: '',
         onUpdate: _.debounce(function({ state, getHTML, getJSON, transaction }) {
+          var title, titleRaw, caption, captionRaw = '';
+          var json = getJSON();
+          if (json.content.length) {
+            title = json.content.shift();
+            titleRaw = title.content[0].text;
+            
+            if (json.content.length) {
+              caption = json.content.shift();
+              for(var i = 0; i < caption.content.length; i++) {
+                captionRaw += caption.content[i].text;
+              }
+            }
+          }
           bus.$http.post('/api/notes/update', {
               type: 'content',
-              page_id: pageid, 
+              page_id: pageid,
+              title: titleRaw,
+              caption: captionRaw,
               content: getHTML(),
               _token: window.Laravel['csrfToken']
           });
