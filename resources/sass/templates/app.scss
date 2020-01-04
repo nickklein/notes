@@ -202,7 +202,6 @@ html, body {
     }
 
     .notes-container {
-        margin: 1.5em;
         position: relative;
         display: flex;
         overflow: hidden;
@@ -219,6 +218,23 @@ html, body {
         height: 100%;
         width: 100%;
     }
+    .editor .editor__content {
+        width: 900px;
+        margin: 0 auto;
+        font-size: 1.1em;
+    }
+    .editor__content h1 {
+        font-weight: 600;
+    }
+    .editor__content { 
+        h1,h2,h3 {
+            margin-bottom: 0.5em;
+        }
+    }
+    .ProseMirror {
+        outline: 0px solid transparent;
+    }
+
 }
 
 #add-more {

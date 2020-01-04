@@ -36,7 +36,6 @@
                 pageid = note_id;
 
                 history.pushState(null, '', '/app#' + note_id);
-                console.log(note_id);
                 bus.$emit('updateComponents', note_id);
 
                 this.selected = note_id;                
