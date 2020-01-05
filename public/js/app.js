@@ -1996,8 +1996,8 @@ __webpack_require__.r(__webpack_exports__);
       });
     },
     back: function back() {
-      var sidebarContainer = document.querySelector('.sidebar-container');
-      var mainWrap = document.querySelector('.main-wrap');
+      var sidebarContainer = document.querySelector('.sidebar-wrapper');
+      var mainWrap = document.querySelector('.main-wrapper');
       sidebarContainer.classList.remove('slideOutSidebar');
       sidebarContainer.classList.add('slideInSidebar');
       mainWrap.classList.remove('slideInMain');
@@ -2065,12 +2065,13 @@ __webpack_require__.r(__webpack_exports__);
       pageid = note_id;
       history.pushState(null, '', '/app#' + note_id);
       _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$emit('updateComponents', note_id);
-      this.selected = note_id; //var sidebarContainer = document.querySelector('.sidebar-container');
-      //var mainWrap = document.querySelector('.main-wrap');
-      //sidebarContainer.classList.remove('slideInSidebar');
-      //sidebarContainer.classList.add('slideOutSidebar');
-      //mainWrap.classList.remove('slideOutMain');
-      //mainWrap.classList.add('slideInMain');
+      this.selected = note_id;
+      var sidebarContainer = document.querySelector('.sidebar-wrapper');
+      var mainWrap = document.querySelector('.main-wrapper');
+      sidebarContainer.classList.remove('slideInSidebar');
+      sidebarContainer.classList.add('slideOutSidebar');
+      mainWrap.classList.remove('slideOutMain');
+      mainWrap.classList.add('slideInMain');
     }
   },
   created: function created() {
@@ -63770,7 +63771,7 @@ var render = function() {
   var _vm = this
   var _h = _vm.$createElement
   var _c = _vm._self._c || _h
-  return _c("div", { staticClass: "col-xl-9 col-lg-6 col-md-6 col-sm-6" }, [
+  return _c("div", { staticClass: "col-xl-9 col-lg-6 col-md-12 col-sm-6" }, [
     _c("div", { staticClass: "mobile-menu" }, [
       _c("ul", { staticClass: "back-menu" }, [
         _c("li", [

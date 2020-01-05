@@ -40,13 +40,13 @@
 
                 this.selected = note_id;                
                 
-                //var sidebarContainer = document.querySelector('.sidebar-container');
-                //var mainWrap = document.querySelector('.main-wrap');
+                var sidebarContainer = document.querySelector('.sidebar-wrapper');
+                var mainWrap = document.querySelector('.main-wrapper');
 
-                //sidebarContainer.classList.remove('slideInSidebar');
-                //sidebarContainer.classList.add('slideOutSidebar');
-                //mainWrap.classList.remove('slideOutMain');
-                //mainWrap.classList.add('slideInMain');
+                sidebarContainer.classList.remove('slideInSidebar');
+                sidebarContainer.classList.add('slideOutSidebar');
+                mainWrap.classList.remove('slideOutMain');
+                mainWrap.classList.add('slideInMain');
 
 
             }

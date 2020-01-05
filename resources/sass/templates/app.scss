@@ -2,7 +2,7 @@ html, body {
     height: 100%;
 }
 
-#app {
+.in-app {
     position: absolute;
     left: 0;
     top: 0;
@@ -10,14 +10,41 @@ html, body {
     height: 100%;
     display: flex;
     flex: 1 0 auto;
-    overflow:hidden;
+
+    @include media-breakpoint-up(md) {
+        overflow:hidden;
+    }
+
 }
 
 .sidebar-wrapper {
-    display: flex;
-    flex-direction: column;
-    width: 350px;
     background: $sidebar-bg;
+    overflow: hidden;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 100;
+
+    @include media-breakpoint-up(md) {
+        display: flex;
+        flex-direction: column;
+        width: 33.33%;
+        position: static;
+    }
+    @include media-breakpoint-up(lg) {
+        display: flex;
+        flex-direction: column;
+        width: 25%;
+        position: static;
+    }
+    @include media-breakpoint-up(xl) {
+        display: flex;
+        flex-direction: column;
+        width: 16.666%;
+        position: static;
+    }
+
 
     ul, li {
         padding: 0;
@@ -94,11 +121,36 @@ html, body {
 
 .main-wrapper {
     position: relative;
-    display: flex;
-    flex-direction: column;
-    flex: 1 1 auto;
+    width: 100%;
+
+    @include media-breakpoint-up(sm) {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 66%;
+        transform: none;
+    }
+    @include media-breakpoint-up(md) {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 66%;
+        width: 66%;
+    }
+    @include media-breakpoint-up(lg) {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 75%;
+    }
+    @include media-breakpoint-up(xl) {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 83%;
+    }
+
 
     .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+
         ul, li {
             padding: 0;
             margin: 0;
@@ -107,7 +159,7 @@ html, body {
         .mobile-menu {
             @include make-col-ready();
             display: flex;
-            @include media-breakpoint-up(sm) { 
+            @include media-breakpoint-up(md) { 
                 display: none;
             }
             .back-menu {
@@ -127,7 +179,7 @@ html, body {
 
         .left-tools {
             display: none;
-            @include media-breakpoint-up(sm) { 
+            @include media-breakpoint-up(md) { 
                 display: inline;
             }
             li {
@@ -166,7 +218,7 @@ html, body {
         }
         .account {
             display: none;
-            @include media-breakpoint-up(sm) { 
+            @include media-breakpoint-up(md) { 
                 display: block;
             }
             #navbarDropdown {
@@ -185,9 +237,6 @@ html, body {
     }
     /* Tags */
     .tags {
-        position: absolute;
-        bottom: 0;
-        left: 0;
         background: #fff;
         .vue-tags-input {
             width: 100%;
@@ -203,33 +252,42 @@ html, body {
 
     .notes-container {
         position: relative;
-        display: flex;
         overflow: hidden;
-        flex-direction: column;
-        flex: 1 1 auto;
+
+        @include media-breakpoint-up(sm) {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+        }
+
     }
     .editor {
-        position: absolute;
-        top: 0;
-        left: 0;
-        display: flex;
-        flex-direction: column;
-        overflow-y: auto;
         height: 100%;
         width: 100%;
+        padding:15px;
+        @include media-breakpoint-up(md) {
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
     }
-    .editor .editor__content {
-        width: 900px;
+    .editor__content {
         margin: 0 auto;
         font-size: 1.1em;
-    }
-    .editor__content h1 {
-        font-weight: 600;
-    }
-    .editor__content { 
+        @include media-breakpoint-up(xl) {
+            width: 70%;
+        }
+        h1 {
+            font-weight: 600;
+        }
         h1,h2,h3 {
             margin-bottom: 0.5em;
         }
+
     }
     .ProseMirror {
         outline: 0px solid transparent;

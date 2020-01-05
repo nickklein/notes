@@ -1,5 +1,5 @@
 <template>
-    <div class="col-xl-9 col-lg-6 col-md-6 col-sm-6">
+    <div class="col-xl-9 col-lg-6 col-md-12 col-sm-6">
         <div class="mobile-menu">
             <ul class="back-menu">
                 <li>
@@ -61,8 +61,8 @@
                 });
             },
             back() {
-                var sidebarContainer = document.querySelector('.sidebar-container');
-                var mainWrap = document.querySelector('.main-wrap');
+                var sidebarContainer = document.querySelector('.sidebar-wrapper');
+                var mainWrap = document.querySelector('.main-wrapper');
 
                 sidebarContainer.classList.remove('slideOutSidebar');
                 sidebarContainer.classList.add('slideInSidebar');
