@@ -9,6 +9,8 @@ use notes\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Foundation\Auth\RegistersUsers;
+use notes\Services\Notes\CreateNote;
+
 
 class RegisterController extends Controller
 {
@@ -68,25 +70,10 @@ class RegisterController extends Controller
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
         ]);
-
-        $title = 'This is your note';
-        $content = 'Here\'s your paragraph';
-
-        $user_id = $user->id;
-        $note = new Notes;
-        $note->note_title = $title;
-        $note->note_caption = $content;
-        $note->note_content = $content;
-        if ($note->save()) {
-            $note_rel = new NotesRel;
-            $note_rel->note_id = $note->note_id;
-            $note_rel->user_id = $user_id;
-            $note_rel->permission = 'admin';
-            $note_rel->order = 0;
-            $note_rel->save();
-        }
-
-
+        
+        $createNote = new CreateNote;
+        $createNote->handle($user->id);
+        
         return $user;
     }
 }
