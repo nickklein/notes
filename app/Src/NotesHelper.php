@@ -8,7 +8,8 @@ class NotesHelper
 {
     public static function fetchCaption(string $data)
     {
-        return substr(strip_tags($data), 0, 50) . '..';
+        
+        return substr(strip_tags($data), 0, 60) . '..';
     }
 
     public static function encrypt(string $value)

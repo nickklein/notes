@@ -69,11 +69,14 @@ class RegisterController extends Controller
             'password' => Hash::make($data['password']),
         ]);
 
+        $title = 'This is your note';
+        $content = 'Here\'s your paragraph';
+
         $user_id = $user->id;
         $note = new Notes;
-        $note->note_title = 'Title your note';
-        $note->note_content = '<h1><span style="color: #3598db;">Title your note</span></h1><p>Here\'s your paragraph</p>';
-        $note->note_caption = 'Here\'s your paragraph';
+        $note->note_title = $title;
+        $note->note_caption = $content;
+        $note->note_content = $content;
         if ($note->save()) {
             $note_rel = new NotesRel;
             $note_rel->note_id = $note->note_id;

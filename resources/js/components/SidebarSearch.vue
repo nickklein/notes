@@ -7,7 +7,7 @@
 <script>
     import {bus} from '../app';
     export default {
-        name: 'search-sidebar',
+        name: 'notes-sidebar-search',
         methods: {
             signalChange: function(test) {
                 // Reduce the amount of requests to the server a little bit, without hopefully effecting UX
