@@ -4,12 +4,12 @@
 
 @section('content')
 
-<aside class="sidebar-wrapper">
+<aside class="sidebar-wrapper animate slideInSidebar">
     <notes-sidebar-search></notes-sidebar-search>
     <notes-sidebar-notes></notes-sidebar-notes>
 </aside>
-<main class="main-wrapper">
-        <header class="toolbar row">
+<main class="main-wrapper animate slideOutMain">
+        <header class="toolbar">
             <notes-main-toolbar></notes-main-toolbar>
 
             <div class="account">
@@ -43,6 +43,7 @@
         <div class="notes-container">
            <notes-main-tiptap></notes-main-tiptap>
         </div>
-        <create-note></create-note>
 </main>
+<create-note></create-note>
+
 @endsection

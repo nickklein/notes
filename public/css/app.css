@@ -3553,7 +3553,7 @@ body {
   height: 100%;
 }
 
-#app {
+.in-app {
   position: absolute;
   left: 0;
   top: 0;
@@ -3561,14 +3561,49 @@ body {
   height: 100%;
   display: flex;
   flex: 1 0 auto;
-  overflow: hidden;
+}
+
+@media (min-width: 768px) {
+  .in-app {
+    overflow: hidden;
+  }
 }
 
 .sidebar-wrapper {
-  display: flex;
-  flex-direction: column;
-  width: 350px;
   background: #FCFCFC;
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 100;
+}
+
+@media (min-width: 768px) {
+  .sidebar-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 33.33%;
+    position: static;
+  }
+}
+
+@media (min-width: 992px) {
+  .sidebar-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 25%;
+    position: static;
+  }
+}
+
+@media (min-width: 1200px) {
+  .sidebar-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 16.666%;
+    position: static;
+  }
 }
 
 .sidebar-wrapper ul,
@@ -3652,10 +3687,48 @@ body {
 
 .main-wrapper {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
+  width: 100%;
   /* Tags */
+}
+
+@media (min-width: 576px) {
+  .main-wrapper {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 66%;
+    -webkit-transform: none;
+            transform: none;
+  }
+}
+
+@media (min-width: 768px) {
+  .main-wrapper {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 66%;
+    width: 66%;
+  }
+}
+
+@media (min-width: 992px) {
+  .main-wrapper {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 75%;
+  }
+}
+
+@media (min-width: 1200px) {
+  .main-wrapper {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 83%;
+  }
+}
+
+.main-wrapper .toolbar {
+  display: flex;
+  flex-wrap: wrap;
 }
 
 .main-wrapper .toolbar ul,
@@ -3672,7 +3745,7 @@ body {
   display: flex;
 }
 
-@media (min-width: 576px) {
+@media (min-width: 768px) {
   .main-wrapper .toolbar .mobile-menu {
     display: none;
   }
@@ -3701,7 +3774,7 @@ body {
   display: none;
 }
 
-@media (min-width: 576px) {
+@media (min-width: 768px) {
   .main-wrapper .toolbar .left-tools {
     display: inline;
   }
@@ -3752,7 +3825,7 @@ body {
   display: none;
 }
 
-@media (min-width: 576px) {
+@media (min-width: 768px) {
   .main-wrapper .toolbar .account {
     display: block;
   }
@@ -3770,9 +3843,6 @@ body {
 }
 
 .main-wrapper .tags {
-  position: absolute;
-  bottom: 0;
-  left: 0;
   background: #fff;
 }
 
@@ -3791,27 +3861,43 @@ body {
 
 .main-wrapper .notes-container {
   position: relative;
-  display: flex;
   overflow: hidden;
-  flex-direction: column;
-  flex: 1 1 auto;
+}
+
+@media (min-width: 576px) {
+  .main-wrapper .notes-container {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+  }
 }
 
 .main-wrapper .editor {
-  position: absolute;
-  top: 0;
-  left: 0;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
   height: 100%;
   width: 100%;
+  padding: 15px;
 }
 
-.main-wrapper .editor .editor__content {
-  width: 900px;
+@media (min-width: 768px) {
+  .main-wrapper .editor {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+}
+
+.main-wrapper .editor__content {
   margin: 0 auto;
   font-size: 1.1em;
+}
+
+@media (min-width: 1200px) {
+  .main-wrapper .editor__content {
+    width: 70%;
+  }
 }
 
 .main-wrapper .editor__content h1 {

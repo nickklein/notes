@@ -99,11 +99,15 @@ class NotesController extends Controller
     public function create()
     {
         //
+        $title = 'This is your note';
+        $content = 'Here\'s your paragraph';
+
         $user_id = Auth::user()->id;
 
         $note = new Notes;
-        $note->note_title = 'Title your note';
-        $note->note_content = NotesHelper::encrypt('<h1>Title your note</h1><p>Here\'s your paragraph</p>');
+        $note->note_title = $title;
+        $note->note_caption = $content;
+        $note->note_content = NotesHelper::encrypt('<h1>' . $title . '</h1><p>' . $content . '/p>');
         if ($note->save()) {
             $note_rel = new NotesRel;
             $note_rel->note_id = $note->note_id;
