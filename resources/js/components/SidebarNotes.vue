@@ -1,5 +1,5 @@
 <template>
-        <ul class="notes-container">
+        <ul class="notes">
             <li class="note" v-for="(item, index) in items" :key="index">
                 <a href="#" v-on:click="changeNote" :class="{active:item.note_id == selected, pinned:item.pinned}" :note_id="item.note_id">
                     <h5>{{item.note_title}}</h5>
@@ -15,7 +15,7 @@
 
 
     export default {
-        name: 'notes-sidebar',
+        name: 'notes-sidebar-notes',
         data() {
             return {
                 items: [],
@@ -36,13 +36,12 @@
                 pageid = note_id;
 
                 history.pushState(null, '', '/app#' + note_id);
-
                 bus.$emit('updateComponents', note_id);
 
                 this.selected = note_id;                
                 
-                var sidebarContainer = document.querySelector('.sidebar-container');
-                var mainWrap = document.querySelector('.main-wrap');
+                var sidebarContainer = document.querySelector('.sidebar-wrapper');
+                var mainWrap = document.querySelector('.main-wrapper');
 
                 sidebarContainer.classList.remove('slideInSidebar');
                 sidebarContainer.classList.add('slideOutSidebar');

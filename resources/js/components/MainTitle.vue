@@ -8,7 +8,7 @@
     import {bus} from '../app';
 
     export default {
-        name: 'notes-title',
+        name: 'notes-main-title',
         data() {
             return {
                 title: 'Type here'

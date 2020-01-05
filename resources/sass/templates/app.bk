@@ -1,0 +1,284 @@
+html, body {
+    height: 100%;
+}
+
+#app {
+    height: 100%;
+    .container-fluid, 
+    .container-fluid .container-row, 
+    .sidebar-container, 
+    .sidebar, .notes-container, 
+    .notes-container .content, 
+    .notes-container .editor,
+    .main-wrap
+    {
+        height: 100%;
+    }
+}
+
+
+#add-more {
+    color: #fff;
+    position: fixed;
+    display: block;
+    right: 25px;
+    bottom: 25px;
+    font-size: 2em;
+    font-weight: bold;
+    border-radius: 50%;
+    background: $sidebar-link-bg-hover;
+    z-index: 100;
+    width: 50px;
+    height: 50px;
+    text-align: center;
+}
+
+.sidebar-container {
+    //col-xl-2 col-lg-3 col-md-4 col-sm-4
+    overflow: hidden;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+
+    @include media-breakpoint-up(sm) {
+        @include make-col(4);
+    }
+    @include media-breakpoint-up(md) {
+        @include make-col-ready();
+        @include make-col(4);
+    }
+    @include media-breakpoint-up(lg) {
+        @include make-col-ready();
+        @include make-col(3);
+    }
+    @include media-breakpoint-up(xl) {
+        @include make-col-ready();
+        @include make-col(2);
+    }
+
+    .sidebar {
+        display: flex;
+        flex-direction: column;
+        background: $sidebar-bg;
+        
+        ul, li {
+            padding: 0;
+            margin: 0;
+        }
+
+        .scrollable-menu {
+            height: auto;
+            max-height: 200px;
+            overflow-x: hidden;
+        }
+
+
+        header.search {
+            padding: 0.5em 1.5em;
+            #search {
+                display: block;
+                background-image: url('/images/icons/search.png');
+                background-size: 15px 15px;
+                background-repeat: no-repeat;
+                background-position: 10px 50%;
+                border-radius: 10px;
+                border: 1px solid #f0f0f0;
+                padding: 5px 6px 5px 40px;
+                width: 100%;
+                margin-bottom: 10px;
+            }
+            .dropdown-toggle {
+                cursor:pointer;
+            }
+        }
+        .notes-container {
+            overflow: auto;
+            height: 100%;;
+            a {
+                position: relative;
+                color: #000;
+                display: block;
+                width: 100%;
+                padding: 2.1em 1.2em;
+                h5 {
+                    font-size: 1em;
+                    //font-weight: bold;
+                    //margin-bottom: 1.2em;
+                }
+                p.caption {
+                    font-size: 0.8em;
+                    color: $sidebar-notes-caption;
+                    margin-bottom: 0;
+                    line-height: 1.1em;
+                }
+                &:hover, &.active {
+                    h5, p.caption {
+                        color: #fff;
+                    }
+                    background: $sidebar-link-bg-hover;
+                }
+
+                &.pinned {
+                    span {
+                        position: absolute;
+                        left: 0;
+                        top: 0;
+                        width: 0;
+                        height: 0;
+                        border-style: solid;
+                        border-width: 25px 25px 0 0;
+                        border-color: $sidebar-link-bg-hover transparent transparent transparent;
+                    }
+                    &.active span, &:hover span {
+                        border-color: #fff transparent transparent transparent;
+                    }
+                }
+
+            }
+        }
+    }
+}
+
+.main-wrap {
+    @include make-col-ready();
+    transform: translate3d(100%, 0px, 0px );
+
+    @include media-breakpoint-up(sm) {
+        transform: none;
+        @include make-col(8);
+    }
+    @include media-breakpoint-up(md) {
+        @include make-col(8);
+    }
+    @include media-breakpoint-up(lg) {
+        @include make-col(9);
+    }
+    @include media-breakpoint-up(xl) {
+        @include make-col(10);
+    }
+
+
+    .toolbar {
+        ul, li {
+            padding: 0;
+            margin: 0;
+        }
+
+        .mobile-menu {
+            @include make-col-ready();
+            display: flex;
+            @include media-breakpoint-up(sm) { 
+                display: none;
+            }
+            .back-menu {
+                @include make-col(2);
+            }
+            .right-tools {
+                @include make-col(9);
+            }
+        }
+
+        .back-menu {
+            margin: 10px;
+            ul, li {
+                list-style-type: none;
+            }
+        }
+
+        .left-tools {
+            display: none;
+            @include media-breakpoint-up(sm) { 
+                display: inline;
+            }
+            li {
+                display: inline-block;
+                margin: 10px;
+                a {
+                    fill: #727272;
+                    display: block;
+                    height: 23px;
+                    width: 23px;
+                    img,svg {
+                        width: 100%;
+                        height: 100%;
+                    }
+                }
+                a.active , a:hover {
+                    fill: $sidebar-link-bg-hover;
+                }
+            }
+        }
+        .right-tools {
+            li {
+                list-style-type: none;
+                float: right;
+                margin: 10px;
+                a {
+                    display: block;
+                    height: 23px;
+                    width: 23px;
+                    img,svg {
+                        width: 100%;
+                        height: 100%;
+                    }
+                }
+            }
+        }
+        .account {
+            display: none;
+            @include media-breakpoint-up(sm) { 
+                display: block;
+            }
+            #navbarDropdown {
+                //float: right;
+                margin: 3px 35px;
+                //width: 50px;
+                //height: 50px;
+                display: block;
+                img {
+                    width: 100%;
+                    height: 100%;
+                    border-radius: 50%;
+                }
+            }
+        }
+    }
+    /* Tags */
+    .tags {
+        .ti-tag {
+            background-color: #298DD6  !important;
+        }
+        .ti-input {
+            border: none !important;
+        }
+    }
+
+    .notes-container {
+        display: flex;
+        flex-direction: column;
+
+        .title {
+            width: 100%;
+            border: none;
+            font-size: 1.8em;
+            color: #298DD6;
+            resize: none;
+        }
+        .tox-tinymce {
+            border: none;
+            font-family: "Roboto", sans-serif;
+            height: 90% !important;
+            .tox-edit-area {
+                border-top: none;
+            }
+        }
+        .editor__content, .ProseMirror {
+            height: 100%;
+        }
+        .ProseMirror {
+            overflow-y: auto;
+        }
+    }
+
+}

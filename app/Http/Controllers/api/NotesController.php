@@ -42,13 +42,12 @@ class NotesController extends Controller
         $excludePinnedIds = $pinned->pluck('note_id')->toArray();
         $settingIds = $pinned->pluck('nsetting_id')->toArray();
         // Pin/Unpin items
-        //dd($pinned);
         $pinned = $pinned->map(function ($pin) {
             $pin->pinned = true;
 
             // Process Caption
             $content = NotesHelper::decrypt($pin->note_content);
-            $pin->note_caption = NotesHelper::fetchCaption($content);
+            $pin->note_caption = NotesHelper::decrypt($pin->note_caption);
             
             return $pin;
         });
@@ -67,7 +66,7 @@ class NotesController extends Controller
 
             // Process Caption
             $content = NotesHelper::decrypt($note->note_content);
-            $note->note_caption = NotesHelper::fetchCaption($content);
+            $note->note_caption = NotesHelper::decrypt($note->note_caption);
 
             return $note;
         });
@@ -100,11 +99,15 @@ class NotesController extends Controller
     public function create()
     {
         //
+        $title = 'This is your note';
+        $content = 'Here\'s your paragraph';
+
         $user_id = Auth::user()->id;
 
         $note = new Notes;
-        $note->note_title = 'Title your note';
-        $note->note_content = NotesHelper::encrypt('Here\'s your paragraph');
+        $note->note_title = $title;
+        $note->note_caption = $content;
+        $note->note_content = NotesHelper::encrypt('<h1>' . $title . '</h1><p>' . $content . '/p>');
         if ($note->save()) {
             $note_rel = new NotesRel;
             $note_rel->note_id = $note->note_id;
@@ -169,13 +172,13 @@ class NotesController extends Controller
                     ])
                     ->first();
                     
-        if ($request->type == 'title') {
-            $note->note_title = $request->title;
-        }
-        if ($request->type == 'content') {
-            $note->note_content = NotesHelper::encrypt($request->content);
-        }
 
+        $note->note_title = $request->title;
+        if ($request->caption) {
+            $note->note_caption = NotesHelper::encrypt(NotesHelper::fetchCaption($request->caption));
+        }
+        $note->note_content = NotesHelper::encrypt($request->content);
+    
         if ($note->save()) {
             return response()->json(array('success' => true));
         }
