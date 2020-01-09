@@ -2245,7 +2245,7 @@ __webpack_require__.r(__webpack_exports__);
     return {
       editor: new tiptap__WEBPACK_IMPORTED_MODULE_0__["Editor"]({
         extensions: [new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["Blockquote"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["BulletList"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["CodeBlock"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["HardBreak"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["Heading"]({
-          levels: [1, 2, 3]
+          levels: [1, 2, 3, 4]
         }), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["HorizontalRule"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["ListItem"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["OrderedList"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["TodoItem"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["TodoList"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["Link"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["Bold"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["Code"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["Italic"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["Strike"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["Underline"](), new tiptap_extensions__WEBPACK_IMPORTED_MODULE_2__["History"]()],
         content: '',
         onUpdate: _.debounce(function (_ref) {
@@ -2280,7 +2280,7 @@ __webpack_require__.r(__webpack_exports__);
             _token: window.Laravel['csrfToken']
           });
           _app__WEBPACK_IMPORTED_MODULE_1__["bus"].$emit('filterSidebar', '');
-        }, 1000)
+        }, 300)
       })
     };
   },
@@ -6989,7 +6989,7 @@ https://highlightjs.org/
       languagePrefixRe = /\blang(?:uage)?-([\w-]+)\b/i,
       fixMarkupRe      = /((^(<[^>]+>|\t|)+|(?:\n)))/gm;
 
-  // The object will be assigned by the build tool. It used to synchronize API 
+  // The object will be assigned by the build tool. It used to synchronize API
   // of external language files with minified version of the highlight.js library.
   var API_REPLACES;
 
@@ -7003,6 +7003,9 @@ https://highlightjs.org/
     useBR: false,
     languages: undefined
   };
+
+  // keywords that should have no default relevance value
+  var COMMON_KEYWORDS = 'of and for in not or if then'.split(' ')
 
 
   /* Utility functions */
@@ -7168,13 +7171,34 @@ https://highlightjs.org/
 
   /* Initialization */
 
-  function expand_mode(mode) {
+  function dependencyOnParent(mode) {
+    if (!mode) return false;
+
+    return mode.endsWithParent || dependencyOnParent(mode.starts)
+  }
+
+  function expand_or_clone_mode(mode) {
     if (mode.variants && !mode.cached_variants) {
       mode.cached_variants = mode.variants.map(function(variant) {
         return inherit(mode, {variants: null}, variant);
       });
     }
-    return mode.cached_variants || (mode.endsWithParent && [inherit(mode)]) || [mode];
+
+    // EXPAND
+    // if we have variants then essentually "replace" the mode with the variants
+    // this happens in compileMode, where this function is called from
+    if (mode.cached_variants)
+      return mode.cached_variants;
+
+    // CLONE
+    // if we have dependencies on parents then we need a unique
+    // instance of ourselves, so we can be reused with many
+    // different parents without issue
+    if (dependencyOnParent(mode))
+      return [inherit(mode, { starts: mode.starts ? inherit(mode.starts) : null })]
+
+    // no special dependency issues, just return ourselves
+    return [mode]
   }
 
   function restoreLanguageApi(obj) {
@@ -7184,6 +7208,44 @@ https://highlightjs.org/
         obj[key] && (obj[API_REPLACES[key]] = obj[key]);
       (obj.contains || []).concat(obj.variants || []).forEach(restoreLanguageApi);
     }
+  }
+
+  function compileKeywords(rawKeywords, case_insensitive) {
+      var compiled_keywords = {};
+
+      if (typeof rawKeywords === 'string') { // string
+        splitAndCompile('keyword', rawKeywords);
+      } else {
+        objectKeys(rawKeywords).forEach(function (className) {
+          splitAndCompile(className, rawKeywords[className]);
+        });
+      }
+    return compiled_keywords;
+
+    // ---
+
+    function splitAndCompile(className, str) {
+      if (case_insensitive) {
+        str = str.toLowerCase();
+      }
+      str.split(' ').forEach(function(keyword) {
+        var pair = keyword.split('|');
+        compiled_keywords[pair[0]] = [className, scoreForKeyword(pair[0], pair[1])];
+      });
+    };
+  }
+
+  function scoreForKeyword(keyword, providedScore) {
+    // manual scores always win over common keywords
+    // so you can force a score of 1 if you really insist
+    if (providedScore)
+      return Number(providedScore)
+
+    return commonKeyword(keyword) ? 0 : 1;
+  }
+
+  function commonKeyword(word) {
+    return COMMON_KEYWORDS.indexOf(word.toLowerCase()) != -1
   }
 
   function compileLanguage(language) {
@@ -7199,8 +7261,15 @@ https://highlightjs.org/
       );
     }
 
+    function reCountMatchGroups(re) {
+      return (new RegExp(re.toString() + '|')).exec('').length - 1;
+    }
+
     // joinRe logically computes regexps.join(separator), but fixes the
     // backreferences so they continue to match.
+    // it also places each individual regular expression into it's own
+    // match group, keeping track of the sequencing of those match groups
+    // is currently an exercise for the caller. :-)
     function joinRe(regexps, separator) {
       // backreferenceRe matches an open parenthesis or backreference. To avoid
       // an incorrect parse, it additionally matches the following:
@@ -7213,11 +7282,13 @@ https://highlightjs.org/
       var numCaptures = 0;
       var ret = '';
       for (var i = 0; i < regexps.length; i++) {
+        numCaptures += 1;
         var offset = numCaptures;
         var re = reStr(regexps[i]);
         if (i > 0) {
           ret += separator;
         }
+        ret += "(";
         while (re.length > 0) {
           var match = backreferenceRe.exec(re);
           if (match == null) {
@@ -7236,8 +7307,73 @@ https://highlightjs.org/
             }
           }
         }
+        ret += ")";
       }
       return ret;
+    }
+
+    function buildModeRegex(mode) {
+
+      var matchIndexes = {};
+      var matcherRe;
+      var regexes = [];
+      var matcher = {};
+      var matchAt = 1;
+
+      function addRule(rule, regex) {
+        matchIndexes[matchAt] = rule;
+        regexes.push([rule, regex]);
+        matchAt += reCountMatchGroups(regex) + 1;
+      }
+
+      var term;
+      for (var i=0; i < mode.contains.length; i++) {
+        var re;
+        term = mode.contains[i];
+        if (term.beginKeywords) {
+          re = '\\.?(?:' + term.begin + ')\\.?';
+        } else {
+          re = term.begin;
+        }
+        addRule(term, re);
+      }
+      if (mode.terminator_end)
+        addRule("end", mode.terminator_end);
+      if (mode.illegal)
+        addRule("illegal", mode.illegal);
+
+      var terminators = regexes.map(function(el) { return el[1] });
+      matcherRe = langRe(joinRe(terminators, '|'), true);
+
+      matcher.lastIndex = 0;
+      matcher.exec = function(s) {
+        var rule;
+
+        if( regexes.length === 0) return null;
+
+        matcherRe.lastIndex = matcher.lastIndex;
+        var match = matcherRe.exec(s);
+        if (!match) { return null; }
+
+        for(var i = 0; i<match.length; i++) {
+          if (match[i] != undefined && matchIndexes["" +i] != undefined ) {
+            rule = matchIndexes[""+i];
+            break;
+          }
+        }
+
+        // illegal or end match
+        if (typeof rule === "string") {
+          match.type = rule;
+          match.extra = [mode.illegal, mode.terminator_end];
+        } else {
+          match.type = "begin";
+          match.rule = rule;
+        }
+        return match;
+      }
+
+      return matcher;
     }
 
     function compileMode(mode, parent) {
@@ -7246,28 +7382,9 @@ https://highlightjs.org/
       mode.compiled = true;
 
       mode.keywords = mode.keywords || mode.beginKeywords;
-      if (mode.keywords) {
-        var compiled_keywords = {};
+      if (mode.keywords)
+        mode.keywords = compileKeywords(mode.keywords, language.case_insensitive)
 
-        var flatten = function(className, str) {
-          if (language.case_insensitive) {
-            str = str.toLowerCase();
-          }
-          str.split(' ').forEach(function(kw) {
-            var pair = kw.split('|');
-            compiled_keywords[pair[0]] = [className, pair[1] ? Number(pair[1]) : 1];
-          });
-        };
-
-        if (typeof mode.keywords === 'string') { // string
-          flatten('keyword', mode.keywords);
-        } else {
-          objectKeys(mode.keywords).forEach(function (className) {
-            flatten(className, mode.keywords[className]);
-          });
-        }
-        mode.keywords = compiled_keywords;
-      }
       mode.lexemesRe = langRe(mode.lexemes || /\w+/, true);
 
       if (parent) {
@@ -7295,7 +7412,7 @@ https://highlightjs.org/
         mode.contains = [];
       }
       mode.contains = Array.prototype.concat.apply([], mode.contains.map(function(c) {
-        return expand_mode(c === 'self' ? mode : c);
+        return expand_or_clone_mode(c === 'self' ? mode : c);
       }));
       mode.contains.forEach(function(c) {compileMode(c, mode);});
 
@@ -7303,16 +7420,9 @@ https://highlightjs.org/
         compileMode(mode.starts, parent);
       }
 
-      var terminators =
-        mode.contains.map(function(c) {
-          return c.beginKeywords ? '\\.?(?:' + c.begin + ')\\.?' : c.begin;
-        })
-        .concat([mode.terminator_end, mode.illegal])
-        .map(reStr)
-        .filter(Boolean);
-      mode.terminators = terminators.length ? langRe(joinRe(terminators, '|'), true) : {exec: function(/*s*/) {return null;}};
+      mode.terminators = buildModeRegex(mode);
     }
-    
+
     compileMode(language);
   }
 
@@ -7331,19 +7441,6 @@ https://highlightjs.org/
       return new RegExp(value.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'm');
     }
 
-    function subMode(lexeme, mode) {
-      var i, length;
-
-      for (i = 0, length = mode.contains.length; i < length; i++) {
-        if (testRe(mode.contains[i].beginRe, lexeme)) {
-          if (mode.contains[i].endSameAsBegin) {
-            mode.contains[i].endRe = escapeRe( mode.contains[i].beginRe.exec(lexeme)[0] );
-          }
-          return mode.contains[i];
-        }
-      }
-    }
-
     function endOfMode(mode, lexeme) {
       if (testRe(mode.endRe, lexeme)) {
         while (mode.endsParent && mode.parent) {
@@ -7356,23 +7453,21 @@ https://highlightjs.org/
       }
     }
 
-    function isIllegal(lexeme, mode) {
-      return !ignore_illegals && testRe(mode.illegalRe, lexeme);
-    }
-
     function keywordMatch(mode, match) {
       var match_str = language.case_insensitive ? match[0].toLowerCase() : match[0];
       return mode.keywords.hasOwnProperty(match_str) && mode.keywords[match_str];
     }
 
     function buildSpan(classname, insideSpan, leaveOpen, noPrefix) {
+      if (!leaveOpen && insideSpan === '') return '';
+      if (!classname) return insideSpan;
+
       var classPrefix = noPrefix ? '' : options.classPrefix,
           openSpan    = '<span class="' + classPrefix,
           closeSpan   = leaveOpen ? '' : spanEndTag;
 
       openSpan += classname + '">';
 
-      if (!classname) return insideSpan;
       return openSpan + insideSpan + closeSpan;
     }
 
@@ -7435,74 +7530,114 @@ https://highlightjs.org/
       top = Object.create(mode, {parent: {value: top}});
     }
 
-    function processLexeme(buffer, lexeme) {
 
-      mode_buffer += buffer;
+    function doBeginMatch(match) {
+      var lexeme = match[0];
+      var new_mode = match.rule;
+
+      if (new_mode && new_mode.endSameAsBegin) {
+        new_mode.endRe = escapeRe( lexeme );
+      }
+
+      if (new_mode.skip) {
+        mode_buffer += lexeme;
+      } else {
+        if (new_mode.excludeBegin) {
+          mode_buffer += lexeme;
+        }
+        processBuffer();
+        if (!new_mode.returnBegin && !new_mode.excludeBegin) {
+          mode_buffer = lexeme;
+        }
+      }
+      startNewMode(new_mode, lexeme);
+      return new_mode.returnBegin ? 0 : lexeme.length;
+    }
+
+    function doEndMatch(match) {
+      var lexeme = match[0];
+      var end_mode = endOfMode(top, lexeme);
+      if (!end_mode) { return; }
+
+      var origin = top;
+      if (origin.skip) {
+        mode_buffer += lexeme;
+      } else {
+        if (!(origin.returnEnd || origin.excludeEnd)) {
+          mode_buffer += lexeme;
+        }
+        processBuffer();
+        if (origin.excludeEnd) {
+          mode_buffer = lexeme;
+        }
+      }
+      do {
+        if (top.className) {
+          result += spanEndTag;
+        }
+        if (!top.skip && !top.subLanguage) {
+          relevance += top.relevance;
+        }
+        top = top.parent;
+      } while (top !== end_mode.parent);
+      if (end_mode.starts) {
+        if (end_mode.endSameAsBegin) {
+          end_mode.starts.endRe = end_mode.endRe;
+        }
+        startNewMode(end_mode.starts, '');
+      }
+      return origin.returnEnd ? 0 : lexeme.length;
+    }
+
+    var lastMatch = {};
+    function processLexeme(text_before_match, match) {
+
+      var lexeme = match && match[0];
+
+      // add non-matched text to the current mode buffer
+      mode_buffer += text_before_match;
 
       if (lexeme == null) {
         processBuffer();
         return 0;
       }
 
-      var new_mode = subMode(lexeme, top);
-      if (new_mode) {
-        if (new_mode.skip) {
-          mode_buffer += lexeme;
-        } else {
-          if (new_mode.excludeBegin) {
-            mode_buffer += lexeme;
-          }
-          processBuffer();
-          if (!new_mode.returnBegin && !new_mode.excludeBegin) {
-            mode_buffer = lexeme;
-          }
-        }
-        startNewMode(new_mode, lexeme);
-        return new_mode.returnBegin ? 0 : lexeme.length;
+      // we've found a 0 width match and we're stuck, so we need to advance
+      // this happens when we have badly behaved rules that have optional matchers to the degree that
+      // sometimes they can end up matching nothing at all
+      // Ref: https://github.com/highlightjs/highlight.js/issues/2140
+      if (lastMatch.type=="begin" && match.type=="end" && lastMatch.index == match.index && lexeme === "") {
+        // spit the "skipped" character that our regex choked on back into the output sequence
+        mode_buffer += value.slice(match.index, match.index + 1)
+        return 1;
       }
+      lastMatch = match;
 
-      var end_mode = endOfMode(top, lexeme);
-      if (end_mode) {
-        var origin = top;
-        if (origin.skip) {
-          mode_buffer += lexeme;
-        } else {
-          if (!(origin.returnEnd || origin.excludeEnd)) {
-            mode_buffer += lexeme;
-          }
-          processBuffer();
-          if (origin.excludeEnd) {
-            mode_buffer = lexeme;
-          }
-        }
-        do {
-          if (top.className) {
-            result += spanEndTag;
-          }
-          if (!top.skip && !top.subLanguage) {
-            relevance += top.relevance;
-          }
-          top = top.parent;
-        } while (top !== end_mode.parent);
-        if (end_mode.starts) {
-          if (end_mode.endSameAsBegin) {
-            end_mode.starts.endRe = end_mode.endRe;
-          }
-          startNewMode(end_mode.starts, '');
-        }
-        return origin.returnEnd ? 0 : lexeme.length;
-      }
-
-      if (isIllegal(lexeme, top))
+      if (match.type==="begin") {
+        return doBeginMatch(match);
+      } else if (match.type==="illegal" && !ignore_illegals) {
+        // illegal match, we do not continue processing
         throw new Error('Illegal lexeme "' + lexeme + '" for mode "' + (top.className || '<unnamed>') + '"');
+      } else if (match.type==="end") {
+        var processed = doEndMatch(match);
+        if (processed != undefined)
+          return processed;
+      }
 
       /*
-      Parser should not reach this point as all types of lexemes should be caught
-      earlier, but if it does due to some bug make sure it advances at least one
-      character forward to prevent infinite looping.
+      Why might be find ourselves here?  Only one occasion now.  An end match that was
+      triggered but could not be completed.  When might this happen?  When an `endSameasBegin`
+      rule sets the end rule to a specific match.  Since the overall mode termination rule that's
+      being used to scan the text isn't recompiled that means that any match that LOOKS like
+      the end (but is not, because it is not an exact match to the beginning) will
+      end up here.  A definite end match, but when `doEndMatch` tries to "reapply"
+      the end rule and fails to match, we wind up here, and just silently ignore the end.
+
+      This causes no real harm other than stopping a few times too many.
       */
+
       mode_buffer += lexeme;
-      return lexeme.length || 1;
+      return lexeme.length;
     }
 
     var language = getLanguage(name);
@@ -7528,7 +7663,7 @@ https://highlightjs.org/
         match = top.terminators.exec(value);
         if (!match)
           break;
-        count = processLexeme(value.substring(index, match.index), match[0]);
+        count = processLexeme(value.substring(index, match.index), match);
         index = match.index + count;
       }
       processLexeme(value.substr(index));
@@ -7540,12 +7675,14 @@ https://highlightjs.org/
       return {
         relevance: relevance,
         value: result,
+        illegal:false,
         language: name,
         top: top
       };
     } catch (e) {
       if (e.message && e.message.indexOf('Illegal') !== -1) {
         return {
+          illegal: true,
           relevance: 0,
           value: escape(value)
         };
@@ -7697,6 +7834,8 @@ https://highlightjs.org/
   function registerLanguage(name, language) {
     var lang = languages[name] = language(hljs);
     restoreLanguageApi(lang);
+    lang.rawDefinition = language.bind(null,hljs);
+
     if (lang.aliases) {
       lang.aliases.forEach(function(alias) {aliases[alias] = name;});
     }
@@ -35394,13 +35533,17 @@ low.getLanguage = getLanguage
 
 var inherit = high.inherit
 var own = {}.hasOwnProperty
-var concat = [].concat
 
 var defaultPrefix = 'hljs-'
 var keyInsensitive = 'case_insensitive'
 var keyCachedVariants = 'cached_variants'
+var keyTerminatorEnd = 'terminator_end'
 var space = ' '
 var verticalBar = '|'
+var parenOpen = '('
+var parenClose = ')'
+var backslash = '\\'
+var commonKeywords = ['of', 'and', 'for', 'in', 'not', 'or', 'if', 'then']
 
 // Maps of syntaxes.
 var languageNames = []
@@ -35482,6 +35625,8 @@ function highlight(language, value, options) {
 function registerLanguage(name, syntax) {
   var lang = syntax(low)
 
+  lang.rawDefinition = syntax.bind(null, low)
+
   languages[name] = lang
 
   languageNames.push(name)
@@ -35526,6 +35671,7 @@ function registerAlias(name, alias) {
 // highlight.
 // eslint-disable-next-line max-params
 function coreHighlight(name, value, ignore, prefix, continuation) {
+  var lastMatch = {}
   var continuations = {}
   var stack = []
   var modeBuffer = ''
@@ -35566,13 +35712,13 @@ function coreHighlight(name, value, ignore, prefix, continuation) {
     match = top.terminators.exec(value)
 
     while (match) {
-      count = processLexeme(value.substring(offset, match.index), match[0])
+      count = processLexeme(value.slice(offset, match.index), match)
       offset = match.index + count
       top.terminators.lastIndex = offset
       match = top.terminators.exec(value)
     }
 
-    processLexeme(value.substr(offset))
+    processLexeme(value.slice(offset))
     current = top
 
     while (current.parent) {
@@ -35586,6 +35732,7 @@ function coreHighlight(name, value, ignore, prefix, continuation) {
     return {
       relevance: relevance,
       value: currentChildren,
+      illegal: false,
       language: name,
       top: top
     }
@@ -35595,68 +35742,133 @@ function coreHighlight(name, value, ignore, prefix, continuation) {
       throw error
     }
 
-    return {relevance: 0, value: addText(value, [])}
+    return {relevance: 0, illegal: true, value: addText(value, [])}
   }
 
-  // Process a lexeme.  Returns next position.
-  function processLexeme(buffer, lexeme) {
-    var newMode
-    var endMode
-    var origin
+  function escapeRe(value) {
+    return new RegExp(value.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'm')
+  }
 
-    modeBuffer += buffer
+  function doBeginMatch(match) {
+    var lexeme = match[0]
+    var newMode = match.rule
 
-    if (lexeme === undefined) {
-      addSiblings(processBuffer(), currentChildren)
-
-      return 0
+    if (newMode && newMode.endSameAsBegin) {
+      newMode.endRe = escapeRe(lexeme)
     }
 
-    newMode = subMode(lexeme, top)
+    if (newMode.skip) {
+      modeBuffer += lexeme
+    } else {
+      if (newMode.excludeBegin) {
+        modeBuffer += lexeme
+      }
 
-    if (newMode) {
       addSiblings(processBuffer(), currentChildren)
 
-      startNewMode(newMode, lexeme)
-
-      return newMode.returnBegin ? 0 : lexeme.length
+      if (!newMode.returnBegin && !newMode.excludeBegin) {
+        modeBuffer = lexeme
+      }
     }
 
-    endMode = endOfMode(top, lexeme)
+    startNewMode(newMode)
 
-    if (endMode) {
-      origin = top
+    return newMode.returnBegin ? 0 : lexeme.length
+  }
 
+  function doEndMatch(match) {
+    var lexeme = match[0]
+    var matchPlusRemainder = value.slice(match.index)
+    var endMode = endOfMode(top, matchPlusRemainder)
+
+    if (!endMode) {
+      return
+    }
+
+    var origin = top
+
+    if (origin.skip) {
+      modeBuffer += lexeme
+    } else {
       if (!(origin.returnEnd || origin.excludeEnd)) {
         modeBuffer += lexeme
       }
 
       addSiblings(processBuffer(), currentChildren)
 
-      // Close open modes.
-      do {
-        if (top.className) {
-          pop()
-        }
-
-        relevance += top.relevance
-        top = top.parent
-      } while (top !== endMode.parent)
-
       if (origin.excludeEnd) {
-        addText(lexeme, currentChildren)
+        modeBuffer = lexeme
       }
-
-      modeBuffer = ''
-
-      if (endMode.starts) {
-        startNewMode(endMode.starts, '')
-      }
-
-      return origin.returnEnd ? 0 : lexeme.length
     }
 
-    if (isIllegal(lexeme, top)) {
+    do {
+      if (top.className) {
+        pop()
+      }
+
+      if (!top.skip && !top.subLanguage) {
+        relevance += top.relevance
+      }
+
+      top = top.parent
+    } while (top !== endMode.parent)
+
+    if (endMode.starts) {
+      /* istanbul ignore if - hljs 9.16 added support for this but didn’t use it yet. */
+      if (endMode.endSameAsBegin) {
+        endMode.starts.endRe = endMode.endRe
+      }
+
+      startNewMode(endMode.starts)
+    }
+
+    return origin.returnEnd ? 0 : lexeme.length
+  }
+
+  function processLexeme(textBeforeMatch, match) {
+    var lexeme = match && match[0]
+    var processed
+
+    // Add non-matched text to the current mode buffer
+    modeBuffer += textBeforeMatch
+
+    if (lexeme === undefined) {
+      addSiblings(processBuffer(), currentChildren)
+      return 0
+    }
+
+    // We've found a 0 width match and we're stuck, so we need to advance
+    // this happens when we have badly behaved rules that have optional matchers to the degree that
+    // sometimes they can end up matching nothing at all
+    // Ref: https://github.com/highlightjs/highlight.js/issues/2140
+    /* istanbul ignore if - Unknown what this fixes or which case fixes it */
+    if (
+      lastMatch.type === 'begin' &&
+      match.type === 'end' &&
+      lastMatch.index === match.index &&
+      lexeme === ''
+    ) {
+      // Spit the “skipped” character that our regex choked on back into the output sequence
+      modeBuffer += value.slice(match.index, match.index + 1)
+      return 1
+    }
+
+    lastMatch = match
+
+    if (match.type === 'begin') {
+      return doBeginMatch(match)
+    }
+
+    if (match.type === 'end') {
+      processed = doEndMatch(match)
+
+      if (processed !== undefined) {
+        return processed
+      }
+    }
+
+    if (match.type === 'illegal' && !ignore) {
+      // Illegal match, we do not continue processing
       throw fault(
         'Illegal lexeme "%s" for mode "%s"',
         lexeme,
@@ -35664,30 +35876,30 @@ function coreHighlight(name, value, ignore, prefix, continuation) {
       )
     }
 
-    // Parser should not reach this point as all types of lexemes should be
-    // caught earlier, but if it does due to some bug make sure it advances
-    // at least one character forward to prevent infinite looping.
+    // Why might be find ourselves here?
+    // Only one occasion now.
+    // An end match that was triggered but could not be completed.
+    // When might this happen?
+    // When an `endSameasBegin` rule sets the end rule to a specific match.
+    // Since the overall mode termination rule that’s being used to scan the
+    // text isn’t recompiled that means that any match that LOOKS like the end
+    // (but is not, because it is not an exact match to the beginning) will end
+    // up here.
+    // A definite end match, but when `doEndMatch` tries to “reapply” the end
+    // rule and fails to match, we wind up here, and just silently ignore the
+    // end.
+    // This causes no real harm other than stopping a few times too many.
     modeBuffer += lexeme
 
-    return lexeme.length || /* istanbul ignore next */ 1
+    return lexeme.length
   }
 
   // Start a new mode with a `lexeme` to process.
-  function startNewMode(mode, lexeme) {
+  function startNewMode(mode) {
     var node
 
     if (mode.className) {
       node = build(mode.className, [])
-    }
-
-    if (mode.returnBegin) {
-      modeBuffer = ''
-    } else if (mode.excludeBegin) {
-      addText(lexeme, currentChildren)
-
-      modeBuffer = ''
-    } else {
-      modeBuffer = lexeme
     }
 
     // Enter a new mode.
@@ -35772,7 +35984,7 @@ function coreHighlight(name, value, ignore, prefix, continuation) {
     keyword = top.lexemesRe.exec(modeBuffer)
 
     while (keyword) {
-      addText(modeBuffer.substring(lastIndex, keyword.index), nodes)
+      addText(modeBuffer.slice(lastIndex, keyword.index), nodes)
 
       submatch = keywordMatch(top, keyword)
 
@@ -35792,7 +36004,7 @@ function coreHighlight(name, value, ignore, prefix, continuation) {
       keyword = top.lexemesRe.exec(modeBuffer)
     }
 
-    addText(modeBuffer.substr(lastIndex), nodes)
+    addText(modeBuffer.slice(lastIndex), nodes)
 
     return nodes
   }
@@ -35859,11 +36071,6 @@ function coreHighlight(name, value, ignore, prefix, continuation) {
     return own.call(mode.keywords, keyword) && mode.keywords[keyword]
   }
 
-  // Check if `lexeme` is illegal according to `mode`.
-  function isIllegal(lexeme, mode) {
-    return !ignore && test(mode.illegalRe, lexeme)
-  }
-
   // Check if `lexeme` ends `mode`.
   function endOfMode(mode, lexeme) {
     if (test(mode.endRe, lexeme)) {
@@ -35879,19 +36086,6 @@ function coreHighlight(name, value, ignore, prefix, continuation) {
     }
   }
 
-  // Check a sub-mode.
-  function subMode(lexeme, mode) {
-    var values = mode.contains
-    var length = values.length
-    var index = -1
-
-    while (++index < length) {
-      if (test(values[index].beginRe, lexeme)) {
-        return values[index]
-      }
-    }
-  }
-
   // Exit the current context.
   function pop() {
     /* istanbul ignore next - removed in hljs 9.3 */
@@ -35899,7 +36093,289 @@ function coreHighlight(name, value, ignore, prefix, continuation) {
   }
 }
 
-function expandMode(mode) {
+// Compile a language.
+function compileLanguage(language) {
+  compileMode(language)
+
+  // Compile a language mode, optionally with a parent.
+  function compileMode(mode, parent) {
+    if (mode.compiled) {
+      return
+    }
+
+    mode.compiled = true
+
+    mode.keywords = mode.keywords || mode.beginKeywords
+
+    if (mode.keywords) {
+      mode.keywords = compileKeywords(mode.keywords, language[keyInsensitive])
+    }
+
+    mode.lexemesRe = langRe(mode.lexemes || /\w+/, true)
+
+    if (parent) {
+      if (mode.beginKeywords) {
+        mode.begin =
+          '\\b(' + mode.beginKeywords.split(space).join(verticalBar) + ')\\b'
+      }
+
+      if (!mode.begin) {
+        mode.begin = /\B|\b/
+      }
+
+      mode.beginRe = langRe(mode.begin)
+
+      if (mode.endSameAsBegin) {
+        mode.end = mode.begin
+      }
+
+      if (!mode.end && !mode.endsWithParent) {
+        mode.end = /\B|\b/
+      }
+
+      if (mode.end) {
+        mode.endRe = langRe(mode.end)
+      }
+
+      mode[keyTerminatorEnd] = source(mode.end) || ''
+
+      if (mode.endsWithParent && parent[keyTerminatorEnd]) {
+        mode[keyTerminatorEnd] +=
+          (mode.end ? verticalBar : '') + parent[keyTerminatorEnd]
+      }
+    }
+
+    if (mode.illegal) {
+      mode.illegalRe = langRe(mode.illegal)
+    }
+
+    if (mode.relevance === undefined) {
+      mode.relevance = 1
+    }
+
+    mode.contains = compileContains(mode.contains || [], mode)
+
+    if (mode.starts) {
+      compileMode(mode.starts, parent)
+    }
+
+    mode.terminators = buildModeRegex(mode)
+  }
+
+  function compileContains(contains, mode) {
+    var result = []
+    var length = contains.length
+    var index = -1
+    var contained
+
+    while (++index < length) {
+      contained = contains[index]
+      result = result.concat(
+        expandOrCloneMode(contained === 'self' ? mode : contained)
+      )
+    }
+
+    length = result.length
+    index = -1
+
+    while (++index < length) {
+      compileMode(result[index], mode)
+    }
+
+    return result
+  }
+
+  function buildModeRegex(mode) {
+    var indices = {}
+    var expression
+    var regexes = []
+    var matcher = {}
+    var matchAt = 1
+    var term
+    var values = mode.contains
+    var length = values.length
+    var index = -1
+    var terminators = []
+
+    while (++index < length) {
+      term = values[index]
+
+      addRule(
+        term,
+        term.beginKeywords ? '\\.?(?:' + term.begin + ')\\.?' : term.begin
+      )
+    }
+
+    if (mode[keyTerminatorEnd]) {
+      addRule('end', mode[keyTerminatorEnd])
+    }
+
+    if (mode.illegal) {
+      addRule('illegal', mode.illegal)
+    }
+
+    length = regexes.length
+    index = -1
+
+    while (++index < length) {
+      terminators[index] = regexes[index][1]
+    }
+
+    expression = langRe(joinRe(terminators, verticalBar), true)
+
+    matcher = {lastIndex: 0, exec: exec}
+
+    return matcher
+
+    function exec(value) {
+      var length
+      var index
+      var rule
+      var match
+      var submatch
+
+      if (regexes.length === 0) return null
+
+      expression.lastIndex = matcher.lastIndex
+      match = expression.exec(value)
+
+      if (!match) {
+        return null
+      }
+
+      length = match.length
+      index = -1
+
+      while (++index < length) {
+        submatch = match[index]
+
+        if (submatch !== undefined && indices[index] !== undefined) {
+          rule = indices[index]
+          break
+        }
+      }
+
+      // Illegal or end match
+      if (typeof rule === 'string') {
+        match.type = rule
+        match.extra = [mode.illegal, mode.terminator_end]
+      } else {
+        match.type = 'begin'
+        match.rule = rule
+      }
+
+      return match
+    }
+
+    function addRule(rule, regex) {
+      indices[matchAt] = rule
+      regexes.push([rule, regex])
+      matchAt += new RegExp(regex.toString() + verticalBar).exec('').length
+    }
+  }
+
+  function joinRe(regexes, separator) {
+    var backreferenceRe = /\[(?:[^\\\]]|\\.)*\]|\(\??|\\([1-9]\d*)|\\./
+    var captures = 0
+    var result = ''
+    var length = regexes.length
+    var index = -1
+    var regex
+    var offset
+    var expression
+    var match
+
+    while (++index < length) {
+      regex = regexes[index]
+      expression = source(regex)
+      captures += 1
+      offset = captures
+
+      if (index !== 0) {
+        result += separator
+      }
+
+      result += parenOpen
+
+      while (expression.length > 0) {
+        match = backreferenceRe.exec(expression)
+
+        if (match === null) {
+          result += expression
+          break
+        }
+
+        result += expression.slice(0, match.index)
+        expression = expression.slice(match.index + match[0].length)
+
+        if (match[0][0] === backslash && match[1]) {
+          // Adjust the backreference.
+          result += backslash + String(Number(match[1]) + offset)
+        } else {
+          result += match[0]
+
+          if (match[0] === parenOpen) {
+            captures++
+          }
+        }
+      }
+
+      result += parenClose
+    }
+
+    return result
+  }
+
+  // Create a regex for `value`.
+  function langRe(value, global) {
+    return new RegExp(
+      source(value),
+      'm' + (language[keyInsensitive] ? 'i' : '') + (global ? 'g' : '')
+    )
+  }
+
+  // Get the source of an expression or string.
+  function source(re) {
+    return (re && re.source) || re
+  }
+}
+
+function compileKeywords(values, caseInsensitive) {
+  var compiled = {}
+  var key
+
+  if (typeof values === 'string') {
+    flatten('keyword', values)
+  } else {
+    for (key in values) {
+      flatten(key, values[key])
+    }
+  }
+
+  return compiled
+
+  function flatten(key, value) {
+    var val = caseInsensitive ? value.toLowerCase() : value
+    all(key, val.split(space))
+  }
+
+  function all(key, values) {
+    var length = values.length
+    var index = -1
+    var pair
+
+    while (++index < length) {
+      pair = values[index].split(verticalBar)
+      compiled[pair[0]] = [key, Number(pair[1]) || common(pair[0]) ? 0 : 1]
+    }
+  }
+}
+
+function common(value) {
+  return commonKeywords.indexOf(value.toLowerCase()) !== -1
+}
+
+function expandOrCloneMode(mode) {
   var length
   var index
   var variants
@@ -35918,148 +36394,18 @@ function expandMode(mode) {
     mode[keyCachedVariants] = result
   }
 
-  return (
-    mode[keyCachedVariants] || (mode.endsWithParent ? [inherit(mode)] : [mode])
-  )
+  // Expand.
+  if (mode.cached_variants) return mode.cached_variants
+
+  // Clone.
+  if (dependencyOnParent(mode))
+    return [inherit(mode, {starts: mode.starts ? inherit(mode.starts) : null})]
+
+  return [mode]
 }
 
-// Compile a language.
-function compileLanguage(language) {
-  compileMode(language)
-
-  // Compile a language mode, optionally with a parent.
-  // eslint-disable-next-line complexity
-  function compileMode(mode, parent) {
-    var compiledKeywords = {}
-    var terminators
-
-    if (mode.compiled) {
-      return
-    }
-
-    mode.compiled = true
-
-    mode.keywords = mode.keywords || mode.beginKeywords
-
-    if (mode.keywords) {
-      if (typeof mode.keywords === 'string') {
-        flatten('keyword', mode.keywords)
-      } else {
-        Object.keys(mode.keywords).forEach(function(className) {
-          flatten(className, mode.keywords[className])
-        })
-      }
-
-      mode.keywords = compiledKeywords
-    }
-
-    mode.lexemesRe = langRe(mode.lexemes || /\w+/, true)
-
-    if (parent) {
-      if (mode.beginKeywords) {
-        mode.begin =
-          '\\b(' + mode.beginKeywords.split(space).join(verticalBar) + ')\\b'
-      }
-
-      if (!mode.begin) {
-        mode.begin = /\B|\b/
-      }
-
-      mode.beginRe = langRe(mode.begin)
-
-      if (!mode.end && !mode.endsWithParent) {
-        mode.end = /\B|\b/
-      }
-
-      if (mode.end) {
-        mode.endRe = langRe(mode.end)
-      }
-
-      mode.terminatorEnd = source(mode.end) || ''
-
-      if (mode.endsWithParent && parent.terminatorEnd) {
-        mode.terminatorEnd +=
-          (mode.end ? verticalBar : '') + parent.terminatorEnd
-      }
-    }
-
-    if (mode.illegal) {
-      mode.illegalRe = langRe(mode.illegal)
-    }
-
-    if (mode.relevance === undefined) {
-      mode.relevance = 1
-    }
-
-    if (!mode.contains) {
-      mode.contains = []
-    }
-
-    mode.contains = concat.apply(
-      [],
-      mode.contains.map(function(c) {
-        return expandMode(c === 'self' ? mode : c)
-      })
-    )
-
-    mode.contains.forEach(function(c) {
-      compileMode(c, mode)
-    })
-
-    if (mode.starts) {
-      compileMode(mode.starts, parent)
-    }
-
-    terminators = mode.contains
-      .map(map)
-      .concat([mode.terminatorEnd, mode.illegal])
-      .map(source)
-      .filter(Boolean)
-
-    mode.terminators =
-      terminators.length === 0
-        ? {exec: execNoop}
-        : langRe(terminators.join(verticalBar), true)
-
-    function map(c) {
-      return c.beginKeywords ? '\\.?(' + c.begin + ')\\.?' : c.begin
-    }
-
-    // Flatten a classname.
-    function flatten(className, value) {
-      var pairs
-      var pair
-      var index
-      var length
-
-      if (language[keyInsensitive]) {
-        value = value.toLowerCase()
-      }
-
-      pairs = value.split(space)
-      length = pairs.length
-      index = -1
-
-      while (++index < length) {
-        pair = pairs[index].split(verticalBar)
-
-        compiledKeywords[pair[0]] = [className, pair[1] ? Number(pair[1]) : 1]
-      }
-    }
-  }
-
-  // Create a regex for `value`.
-  function langRe(value, global) {
-    return new RegExp(
-      source(value),
-      'm' + (language[keyInsensitive] ? 'i' : '') + (global ? 'g' : '')
-    )
-  }
-
-  // Get the source of an expression or string.
-  function source(re) {
-    return (re && re.source) || re
-  }
+function dependencyOnParent(mode) {
+  return mode ? mode.endsWithParent || dependencyOnParent(mode.starts) : false
 }
 
 // Normalize a syntax result.
@@ -36077,11 +36423,6 @@ function test(expression, lexeme) {
   return match && match.index === 0
 }
 
-// No-op exec.
-function execNoop() {
-  return null
-}
-
 // Get a language by `name`.
 function getLanguage(name) {
   name = name.toLowerCase()
@@ -36092,17 +36433,19 @@ function getLanguage(name) {
 
 /***/ }),
 
-/***/ "./node_modules/orderedmap/index.js":
-/*!******************************************!*\
-  !*** ./node_modules/orderedmap/index.js ***!
-  \******************************************/
-/*! no static exports found */
-/***/ (function(module, exports) {
+/***/ "./node_modules/orderedmap/index.mjs":
+/*!*******************************************!*\
+  !*** ./node_modules/orderedmap/index.mjs ***!
+  \*******************************************/
+/*! exports provided: default */
+/***/ (function(__webpack_module__, __webpack_exports__, __webpack_require__) {
 
+"use strict";
+__webpack_require__.r(__webpack_exports__);
 // ::- Persistent data structure representing an ordered mapping from
 // strings to values, with some convenient update methods.
 function OrderedMap(content) {
-  this.content = content
+  this.content = content;
 }
 
 OrderedMap.prototype = {
@@ -36118,7 +36461,7 @@ OrderedMap.prototype = {
   // Retrieve the value stored under `key`, or return undefined when
   // no such key exists.
   get: function(key) {
-    var found = this.find(key)
+    var found = this.find(key);
     return found == -1 ? undefined : this.content[found + 1]
   },
 
@@ -36127,13 +36470,13 @@ OrderedMap.prototype = {
   // value, or adding a binding to the end of the map. If `newKey` is
   // given, the key of the binding will be replaced with that key.
   update: function(key, value, newKey) {
-    var self = newKey && newKey != key ? this.remove(newKey) : this
-    var found = self.find(key), content = self.content.slice()
+    var self = newKey && newKey != key ? this.remove(newKey) : this;
+    var found = self.find(key), content = self.content.slice();
     if (found == -1) {
-      content.push(newKey || key, value)
+      content.push(newKey || key, value);
     } else {
-      content[found + 1] = value
-      if (newKey) content[found] = newKey
+      content[found + 1] = value;
+      if (newKey) content[found] = newKey;
     }
     return new OrderedMap(content)
   },
@@ -36141,10 +36484,10 @@ OrderedMap.prototype = {
   // :: (string) → OrderedMap
   // Return a map with the given key removed, if it existed.
   remove: function(key) {
-    var found = this.find(key)
+    var found = this.find(key);
     if (found == -1) return this
-    var content = this.content.slice()
-    content.splice(found, 2)
+    var content = this.content.slice();
+    content.splice(found, 2);
     return new OrderedMap(content)
   },
 
@@ -36157,8 +36500,8 @@ OrderedMap.prototype = {
   // :: (string, any) → OrderedMap
   // Add a new key to the end of the map.
   addToEnd: function(key, value) {
-    var content = this.remove(key).content.slice()
-    content.push(key, value)
+    var content = this.remove(key).content.slice();
+    content.push(key, value);
     return new OrderedMap(content)
   },
 
@@ -36166,9 +36509,9 @@ OrderedMap.prototype = {
   // Add a key after the given key. If `place` is not found, the new
   // key is added to the end.
   addBefore: function(place, key, value) {
-    var without = this.remove(key), content = without.content.slice()
-    var found = without.find(place)
-    content.splice(found == -1 ? content.length : found, 0, key, value)
+    var without = this.remove(key), content = without.content.slice();
+    var found = without.find(place);
+    content.splice(found == -1 ? content.length : found, 0, key, value);
     return new OrderedMap(content)
   },
 
@@ -36177,14 +36520,14 @@ OrderedMap.prototype = {
   // order.
   forEach: function(f) {
     for (var i = 0; i < this.content.length; i += 2)
-      f(this.content[i], this.content[i + 1])
+      f(this.content[i], this.content[i + 1]);
   },
 
   // :: (union<Object, OrderedMap>) → OrderedMap
   // Create a new map by prepending the keys in this map that don't
   // appear in `map` before the keys in `map`.
   prepend: function(map) {
-    map = OrderedMap.from(map)
+    map = OrderedMap.from(map);
     if (!map.size) return this
     return new OrderedMap(map.content.concat(this.subtract(map).content))
   },
@@ -36193,7 +36536,7 @@ OrderedMap.prototype = {
   // Create a new map by appending the keys in this map that don't
   // appear in `map` after the keys in `map`.
   append: function(map) {
-    map = OrderedMap.from(map)
+    map = OrderedMap.from(map);
     if (!map.size) return this
     return new OrderedMap(this.subtract(map).content.concat(map.content))
   },
@@ -36202,10 +36545,10 @@ OrderedMap.prototype = {
   // Create a map containing all the keys in this map that don't
   // appear in `map`.
   subtract: function(map) {
-    var result = this
-    map = OrderedMap.from(map)
+    var result = this;
+    map = OrderedMap.from(map);
     for (var i = 0; i < map.content.length; i += 2)
-      result = result.remove(map.content[i])
+      result = result.remove(map.content[i]);
     return result
   },
 
@@ -36214,7 +36557,7 @@ OrderedMap.prototype = {
   get size() {
     return this.content.length >> 1
   }
-}
+};
 
 // :: (?union<Object, OrderedMap>) → OrderedMap
 // Return a map with the given content. If null, create an empty
@@ -36222,12 +36565,14 @@ OrderedMap.prototype = {
 // object, create a map from the object's properties.
 OrderedMap.from = function(value) {
   if (value instanceof OrderedMap) return value
-  var content = []
-  if (value) for (var prop in value) content.push(prop, value[prop])
+  var content = [];
+  if (value) for (var prop in value) content.push(prop, value[prop]);
   return new OrderedMap(content)
-}
+};
 
-module.exports = OrderedMap
+var orderedmap = OrderedMap;
+
+/* harmony default export */ __webpack_exports__["default"] = (orderedmap);
 
 
 /***/ }),
@@ -39045,19 +39390,22 @@ process.umask = function() { return 0; };
 
 /***/ }),
 
-/***/ "./node_modules/prosemirror-collab/dist/collab.js":
-/*!********************************************************!*\
-  !*** ./node_modules/prosemirror-collab/dist/collab.js ***!
-  \********************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
+/***/ "./node_modules/prosemirror-collab/dist/index.es.js":
+/*!**********************************************************!*\
+  !*** ./node_modules/prosemirror-collab/dist/index.es.js ***!
+  \**********************************************************/
+/*! exports provided: collab, getVersion, rebaseSteps, receiveTransaction, sendableSteps */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "collab", function() { return collab; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "getVersion", function() { return getVersion; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "rebaseSteps", function() { return rebaseSteps; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "receiveTransaction", function() { return receiveTransaction; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "sendableSteps", function() { return sendableSteps; });
+/* harmony import */ var prosemirror_state__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.es.js");
 
-
-Object.defineProperty(exports, '__esModule', { value: true });
-
-var prosemirrorState = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.js");
 
 var Rebaseable = function Rebaseable(step, inverted, origin) {
   this.step = step;
@@ -39111,7 +39459,7 @@ function unconfirmedFrom(transform) {
   return result
 }
 
-var collabKey = new prosemirrorState.PluginKey("collab");
+var collabKey = new prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["PluginKey"]("collab");
 
 // :: (?Object) → Plugin
 //
@@ -39133,7 +39481,7 @@ function collab(config) {
   config = {version: config.version || 0,
             clientID: config.clientID == null ? Math.floor(Math.random() * 0xFFFFFFFF) : config.clientID};
 
-  return new prosemirrorState.Plugin({
+  return new prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["Plugin"]({
     key: collabKey,
 
     state: {
@@ -39199,8 +39547,8 @@ function receiveTransaction(state, steps, clientIDs, options) {
   }
 
   var newCollabState = new CollabState(version, unconfirmed);
-  if (options && options.mapSelectionBackward && state.selection instanceof prosemirrorState.TextSelection) {
-    tr.setSelection(prosemirrorState.TextSelection.between(tr.doc.resolve(tr.mapping.map(state.selection.anchor, -1)),
+  if (options && options.mapSelectionBackward && state.selection instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"]) {
+    tr.setSelection(prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"].between(tr.doc.resolve(tr.mapping.map(state.selection.anchor, -1)),
                                           tr.doc.resolve(tr.mapping.map(state.selection.head, -1)), -1));
     tr.updated &= ~1;
   }
@@ -39235,31 +39583,51 @@ function getVersion(state) {
   return collabKey.getState(state).version
 }
 
-exports.rebaseSteps = rebaseSteps;
-exports.collab = collab;
-exports.receiveTransaction = receiveTransaction;
-exports.sendableSteps = sendableSteps;
-exports.getVersion = getVersion;
-//# sourceMappingURL=collab.js.map
+
+//# sourceMappingURL=index.es.js.map
 
 
 /***/ }),
 
-/***/ "./node_modules/prosemirror-commands/dist/commands.js":
+/***/ "./node_modules/prosemirror-commands/dist/index.es.js":
 /*!************************************************************!*\
-  !*** ./node_modules/prosemirror-commands/dist/commands.js ***!
+  !*** ./node_modules/prosemirror-commands/dist/index.es.js ***!
   \************************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
+/*! exports provided: autoJoin, baseKeymap, chainCommands, createParagraphNear, deleteSelection, exitCode, joinBackward, joinDown, joinForward, joinUp, lift, liftEmptyBlock, macBaseKeymap, newlineInCode, pcBaseKeymap, selectAll, selectNodeBackward, selectNodeForward, selectParentNode, setBlockType, splitBlock, splitBlockKeepMarks, toggleMark, wrapIn */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "autoJoin", function() { return autoJoin; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "baseKeymap", function() { return baseKeymap; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "chainCommands", function() { return chainCommands; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "createParagraphNear", function() { return createParagraphNear; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "deleteSelection", function() { return deleteSelection; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "exitCode", function() { return exitCode; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "joinBackward", function() { return joinBackward; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "joinDown", function() { return joinDown; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "joinForward", function() { return joinForward; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "joinUp", function() { return joinUp; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "lift", function() { return lift; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "liftEmptyBlock", function() { return liftEmptyBlock; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "macBaseKeymap", function() { return macBaseKeymap; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "newlineInCode", function() { return newlineInCode; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "pcBaseKeymap", function() { return pcBaseKeymap; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "selectAll", function() { return selectAll; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "selectNodeBackward", function() { return selectNodeBackward; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "selectNodeForward", function() { return selectNodeForward; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "selectParentNode", function() { return selectParentNode; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "setBlockType", function() { return setBlockType; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "splitBlock", function() { return splitBlock; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "splitBlockKeepMarks", function() { return splitBlockKeepMarks; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "toggleMark", function() { return toggleMark; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "wrapIn", function() { return wrapIn; });
+/* harmony import */ var prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! prosemirror-transform */ "./node_modules/prosemirror-transform/dist/index.es.js");
+/* harmony import */ var prosemirror_model__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.es.js");
+/* harmony import */ var prosemirror_state__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.es.js");
 
 
-Object.defineProperty(exports, '__esModule', { value: true });
 
-var prosemirrorTransform = __webpack_require__(/*! prosemirror-transform */ "./node_modules/prosemirror-transform/dist/index.js");
-var prosemirrorModel = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.js");
-var prosemirrorState = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.js");
 
 // :: (EditorState, ?(tr: Transaction)) → bool
 // Delete the selection, if there is one.
@@ -39288,7 +39656,7 @@ function joinBackward(state, dispatch, view) {
 
   // If there is no node before this, try to lift
   if (!$cut) {
-    var range = $cursor.blockRange(), target = range && prosemirrorTransform.liftTarget(range);
+    var range = $cursor.blockRange(), target = range && Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["liftTarget"])(range);
     if (target == null) { return false }
     if (dispatch) { dispatch(state.tr.lift(range, target).scrollIntoView()); }
     return true
@@ -39302,11 +39670,11 @@ function joinBackward(state, dispatch, view) {
   // If the node below has no content and the node above is
   // selectable, delete the node below and select the one above.
   if ($cursor.parent.content.size == 0 &&
-      (textblockAt(before, "end") || prosemirrorState.NodeSelection.isSelectable(before))) {
+      (textblockAt(before, "end") || prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["NodeSelection"].isSelectable(before))) {
     if (dispatch) {
       var tr = state.tr.deleteRange($cursor.before(), $cursor.after());
-      tr.setSelection(textblockAt(before, "end") ? prosemirrorState.Selection.findFrom(tr.doc.resolve(tr.mapping.map($cut.pos, -1)), -1)
-                      : prosemirrorState.NodeSelection.create(tr.doc, $cut.pos - before.nodeSize));
+      tr.setSelection(textblockAt(before, "end") ? prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["Selection"].findFrom(tr.doc.resolve(tr.mapping.map($cut.pos, -1)), -1)
+                      : prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["NodeSelection"].create(tr.doc, $cut.pos - before.nodeSize));
       dispatch(tr.scrollIntoView());
     }
     return true
@@ -39342,9 +39710,9 @@ function selectNodeBackward(state, dispatch, view) {
     { return false }
 
   var $cut = findCutBefore($cursor), node = $cut && $cut.nodeBefore;
-  if (!node || !prosemirrorState.NodeSelection.isSelectable(node)) { return false }
+  if (!node || !prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["NodeSelection"].isSelectable(node)) { return false }
   if (dispatch)
-    { dispatch(state.tr.setSelection(prosemirrorState.NodeSelection.create(state.doc, $cut.pos - node.nodeSize)).scrollIntoView()); }
+    { dispatch(state.tr.setSelection(prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["NodeSelection"].create(state.doc, $cut.pos - node.nodeSize)).scrollIntoView()); }
   return true
 }
 
@@ -39381,11 +39749,11 @@ function joinForward(state, dispatch, view) {
   // If the node above has no content and the node below is
   // selectable, delete the node above and select the one below.
   if ($cursor.parent.content.size == 0 &&
-      (textblockAt(after, "start") || prosemirrorState.NodeSelection.isSelectable(after))) {
+      (textblockAt(after, "start") || prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["NodeSelection"].isSelectable(after))) {
     if (dispatch) {
       var tr = state.tr.deleteRange($cursor.before(), $cursor.after());
-      tr.setSelection(textblockAt(after, "start") ? prosemirrorState.Selection.findFrom(tr.doc.resolve(tr.mapping.map($cut.pos)), 1)
-                      : prosemirrorState.NodeSelection.create(tr.doc, tr.mapping.map($cut.pos)));
+      tr.setSelection(textblockAt(after, "start") ? prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["Selection"].findFrom(tr.doc.resolve(tr.mapping.map($cut.pos)), 1)
+                      : prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["NodeSelection"].create(tr.doc, tr.mapping.map($cut.pos)));
       dispatch(tr.scrollIntoView());
     }
     return true
@@ -39415,9 +39783,9 @@ function selectNodeForward(state, dispatch, view) {
     { return false }
 
   var $cut = findCutAfter($cursor), node = $cut && $cut.nodeAfter;
-  if (!node || !prosemirrorState.NodeSelection.isSelectable(node)) { return false }
+  if (!node || !prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["NodeSelection"].isSelectable(node)) { return false }
   if (dispatch)
-    { dispatch(state.tr.setSelection(prosemirrorState.NodeSelection.create(state.doc, $cut.pos)).scrollIntoView()); }
+    { dispatch(state.tr.setSelection(prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["NodeSelection"].create(state.doc, $cut.pos)).scrollIntoView()); }
   return true
 }
 
@@ -39435,17 +39803,17 @@ function findCutAfter($pos) {
 // closest ancestor block of the selection that can be joined, with
 // the sibling above it.
 function joinUp(state, dispatch) {
-  var sel = state.selection, nodeSel = sel instanceof prosemirrorState.NodeSelection, point;
+  var sel = state.selection, nodeSel = sel instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["NodeSelection"], point;
   if (nodeSel) {
-    if (sel.node.isTextblock || !prosemirrorTransform.canJoin(state.doc, sel.from)) { return false }
+    if (sel.node.isTextblock || !Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["canJoin"])(state.doc, sel.from)) { return false }
     point = sel.from;
   } else {
-    point = prosemirrorTransform.joinPoint(state.doc, sel.from, -1);
+    point = Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["joinPoint"])(state.doc, sel.from, -1);
     if (point == null) { return false }
   }
   if (dispatch) {
     var tr = state.tr.join(point);
-    if (nodeSel) { tr.setSelection(prosemirrorState.NodeSelection.create(tr.doc, point - state.doc.resolve(point).nodeBefore.nodeSize)); }
+    if (nodeSel) { tr.setSelection(prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["NodeSelection"].create(tr.doc, point - state.doc.resolve(point).nodeBefore.nodeSize)); }
     dispatch(tr.scrollIntoView());
   }
   return true
@@ -39456,11 +39824,11 @@ function joinUp(state, dispatch) {
 // that can be joined, with the sibling after it.
 function joinDown(state, dispatch) {
   var sel = state.selection, point;
-  if (sel instanceof prosemirrorState.NodeSelection) {
-    if (sel.node.isTextblock || !prosemirrorTransform.canJoin(state.doc, sel.to)) { return false }
+  if (sel instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["NodeSelection"]) {
+    if (sel.node.isTextblock || !Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["canJoin"])(state.doc, sel.to)) { return false }
     point = sel.to;
   } else {
-    point = prosemirrorTransform.joinPoint(state.doc, sel.to, 1);
+    point = Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["joinPoint"])(state.doc, sel.to, 1);
     if (point == null) { return false }
   }
   if (dispatch)
@@ -39475,7 +39843,7 @@ function lift(state, dispatch) {
   var ref = state.selection;
   var $from = ref.$from;
   var $to = ref.$to;
-  var range = $from.blockRange($to), target = range && prosemirrorTransform.liftTarget(range);
+  var range = $from.blockRange($to), target = range && Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["liftTarget"])(range);
   if (target == null) { return false }
   if (dispatch) { dispatch(state.tr.lift(range, target).scrollIntoView()); }
   return true
@@ -39507,7 +39875,7 @@ function exitCode(state, dispatch) {
   if (!above.canReplaceWith(after, after, type)) { return false }
   if (dispatch) {
     var pos = $head.after(), tr = state.tr.replaceWith(pos, pos, type.createAndFill());
-    tr.setSelection(prosemirrorState.Selection.near(tr.doc.resolve(pos), 1));
+    tr.setSelection(prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["Selection"].near(tr.doc.resolve(pos), 1));
     dispatch(tr.scrollIntoView());
   }
   return true
@@ -39526,7 +39894,7 @@ function createParagraphNear(state, dispatch) {
   if (dispatch) {
     var side = (!$from.parentOffset && $to.index() < $to.parent.childCount ? $from : $to).pos;
     var tr = state.tr.insert(side, type.createAndFill());
-    tr.setSelection(prosemirrorState.TextSelection.create(tr.doc, side + 1));
+    tr.setSelection(prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["TextSelection"].create(tr.doc, side + 1));
     dispatch(tr.scrollIntoView());
   }
   return true
@@ -39541,12 +39909,12 @@ function liftEmptyBlock(state, dispatch) {
   if (!$cursor || $cursor.parent.content.size) { return false }
   if ($cursor.depth > 1 && $cursor.after() != $cursor.end(-1)) {
     var before = $cursor.before();
-    if (prosemirrorTransform.canSplit(state.doc, before)) {
+    if (Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["canSplit"])(state.doc, before)) {
       if (dispatch) { dispatch(state.tr.split(before).scrollIntoView()); }
       return true
     }
   }
-  var range = $cursor.blockRange(), target = range && prosemirrorTransform.liftTarget(range);
+  var range = $cursor.blockRange(), target = range && Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["liftTarget"])(range);
   if (target == null) { return false }
   if (dispatch) { dispatch(state.tr.lift(range, target).scrollIntoView()); }
   return true
@@ -39559,8 +39927,8 @@ function splitBlock(state, dispatch) {
   var ref = state.selection;
   var $from = ref.$from;
   var $to = ref.$to;
-  if (state.selection instanceof prosemirrorState.NodeSelection && state.selection.node.isBlock) {
-    if (!$from.parentOffset || !prosemirrorTransform.canSplit(state.doc, $from.pos)) { return false }
+  if (state.selection instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["NodeSelection"] && state.selection.node.isBlock) {
+    if (!$from.parentOffset || !Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["canSplit"])(state.doc, $from.pos)) { return false }
     if (dispatch) { dispatch(state.tr.split($from.pos).scrollIntoView()); }
     return true
   }
@@ -39570,18 +39938,18 @@ function splitBlock(state, dispatch) {
   if (dispatch) {
     var atEnd = $to.parentOffset == $to.parent.content.size;
     var tr = state.tr;
-    if (state.selection instanceof prosemirrorState.TextSelection) { tr.deleteSelection(); }
+    if (state.selection instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["TextSelection"]) { tr.deleteSelection(); }
     var deflt = $from.depth == 0 ? null : $from.node(-1).contentMatchAt($from.indexAfter(-1)).defaultType;
     var types = atEnd && deflt ? [{type: deflt}] : null;
-    var can = prosemirrorTransform.canSplit(tr.doc, tr.mapping.map($from.pos), 1, types);
-    if (!types && !can && prosemirrorTransform.canSplit(tr.doc, tr.mapping.map($from.pos), 1, deflt && [{type: deflt}])) {
+    var can = Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["canSplit"])(tr.doc, tr.mapping.map($from.pos), 1, types);
+    if (!types && !can && Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["canSplit"])(tr.doc, tr.mapping.map($from.pos), 1, deflt && [{type: deflt}])) {
       types = [{type: deflt}];
       can = true;
     }
     if (can) {
       tr.split(tr.mapping.map($from.pos), 1, types);
       if (!atEnd && !$from.parentOffset && $from.parent.type != deflt &&
-          $from.node(-1).canReplace($from.index(-1), $from.indexAfter(-1), prosemirrorModel.Fragment.from(deflt.create(), $from.parent)))
+          $from.node(-1).canReplace($from.index(-1), $from.indexAfter(-1), prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(deflt.create(), $from.parent)))
         { tr.setNodeMarkup(tr.mapping.map($from.before()), deflt); }
     }
     dispatch(tr.scrollIntoView());
@@ -39611,14 +39979,14 @@ function selectParentNode(state, dispatch) {
   var same = $from.sharedDepth(to);
   if (same == 0) { return false }
   pos = $from.before(same);
-  if (dispatch) { dispatch(state.tr.setSelection(prosemirrorState.NodeSelection.create(state.doc, pos))); }
+  if (dispatch) { dispatch(state.tr.setSelection(prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["NodeSelection"].create(state.doc, pos))); }
   return true
 }
 
 // :: (EditorState, ?(tr: Transaction)) → bool
 // Select the whole document.
 function selectAll(state, dispatch) {
-  if (dispatch) { dispatch(state.tr.setSelection(new prosemirrorState.AllSelection(state.doc))); }
+  if (dispatch) { dispatch(state.tr.setSelection(new prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["AllSelection"](state.doc))); }
   return true
 }
 
@@ -39629,7 +39997,7 @@ function joinMaybeClear(state, $pos, dispatch) {
     if (dispatch) { dispatch(state.tr.delete($pos.pos - before.nodeSize, $pos.pos).scrollIntoView()); }
     return true
   }
-  if (!$pos.parent.canReplace(index, index + 1) || !(after.isTextblock || prosemirrorTransform.canJoin(state.doc, $pos.pos)))
+  if (!$pos.parent.canReplace(index, index + 1) || !(after.isTextblock || Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["canJoin"])(state.doc, $pos.pos)))
     { return false }
   if (dispatch)
     { dispatch(state.tr
@@ -39648,20 +40016,20 @@ function deleteBarrier(state, $cut, dispatch) {
       (conn = (match = before.contentMatchAt(before.childCount)).findWrapping(after.type)) &&
       match.matchType(conn[0] || after.type).validEnd) {
     if (dispatch) {
-      var end = $cut.pos + after.nodeSize, wrap = prosemirrorModel.Fragment.empty;
+      var end = $cut.pos + after.nodeSize, wrap = prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].empty;
       for (var i = conn.length - 1; i >= 0; i--)
-        { wrap = prosemirrorModel.Fragment.from(conn[i].create(null, wrap)); }
-      wrap = prosemirrorModel.Fragment.from(before.copy(wrap));
-      var tr = state.tr.step(new prosemirrorTransform.ReplaceAroundStep($cut.pos - 1, end, $cut.pos, end, new prosemirrorModel.Slice(wrap, 1, 0), conn.length, true));
+        { wrap = prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(conn[i].create(null, wrap)); }
+      wrap = prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(before.copy(wrap));
+      var tr = state.tr.step(new prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["ReplaceAroundStep"]($cut.pos - 1, end, $cut.pos, end, new prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"](wrap, 1, 0), conn.length, true));
       var joinAt = end + 2 * conn.length;
-      if (prosemirrorTransform.canJoin(tr.doc, joinAt)) { tr.join(joinAt); }
+      if (Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["canJoin"])(tr.doc, joinAt)) { tr.join(joinAt); }
       dispatch(tr.scrollIntoView());
     }
     return true
   }
 
-  var selAfter = prosemirrorState.Selection.findFrom($cut, 1);
-  var range = selAfter && selAfter.$from.blockRange(selAfter.$to), target = range && prosemirrorTransform.liftTarget(range);
+  var selAfter = prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["Selection"].findFrom($cut, 1);
+  var range = selAfter && selAfter.$from.blockRange(selAfter.$to), target = range && Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["liftTarget"])(range);
   if (target != null && target >= $cut.depth) {
     if (dispatch) { dispatch(state.tr.lift(range, target).scrollIntoView()); }
     return true
@@ -39680,7 +40048,7 @@ function wrapIn(nodeType, attrs) {
     var ref = state.selection;
     var $from = ref.$from;
     var $to = ref.$to;
-    var range = $from.blockRange($to), wrapping = range && prosemirrorTransform.findWrapping(range, nodeType, attrs);
+    var range = $from.blockRange($to), wrapping = range && Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["findWrapping"])(range, nodeType, attrs);
     if (!wrapping) { return false }
     if (dispatch) { dispatch(state.tr.wrap(range, wrapping).scrollIntoView()); }
     return true
@@ -39808,7 +40176,7 @@ function wrapDispatchForJoin(dispatch, isJoinable) {
     // Join the joinable points
     joinable.sort(function (a, b) { return a - b; });
     for (var i$2 = joinable.length - 1; i$2 >= 0; i$2--) {
-      if (prosemirrorTransform.canJoin(tr.doc, joinable[i$2])) { tr.join(joinable[i$2]); }
+      if (Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["canJoin"])(tr.doc, joinable[i$2])) { tr.join(joinable[i$2]); }
     }
     dispatch(tr);
   }
@@ -39892,49 +40260,26 @@ var mac = typeof navigator != "undefined" ? /Mac/.test(navigator.platform)
 // [`macBaseKeymap`](#commands.macBaseKeymap).
 var baseKeymap = mac ? macBaseKeymap : pcBaseKeymap;
 
-exports.deleteSelection = deleteSelection;
-exports.joinBackward = joinBackward;
-exports.selectNodeBackward = selectNodeBackward;
-exports.joinForward = joinForward;
-exports.selectNodeForward = selectNodeForward;
-exports.joinUp = joinUp;
-exports.joinDown = joinDown;
-exports.lift = lift;
-exports.newlineInCode = newlineInCode;
-exports.exitCode = exitCode;
-exports.createParagraphNear = createParagraphNear;
-exports.liftEmptyBlock = liftEmptyBlock;
-exports.splitBlock = splitBlock;
-exports.splitBlockKeepMarks = splitBlockKeepMarks;
-exports.selectParentNode = selectParentNode;
-exports.selectAll = selectAll;
-exports.wrapIn = wrapIn;
-exports.setBlockType = setBlockType;
-exports.toggleMark = toggleMark;
-exports.autoJoin = autoJoin;
-exports.chainCommands = chainCommands;
-exports.pcBaseKeymap = pcBaseKeymap;
-exports.macBaseKeymap = macBaseKeymap;
-exports.baseKeymap = baseKeymap;
-//# sourceMappingURL=commands.js.map
+
+//# sourceMappingURL=index.es.js.map
 
 
 /***/ }),
 
-/***/ "./node_modules/prosemirror-dropcursor/dist/dropcursor.js":
-/*!****************************************************************!*\
-  !*** ./node_modules/prosemirror-dropcursor/dist/dropcursor.js ***!
-  \****************************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
+/***/ "./node_modules/prosemirror-dropcursor/dist/index.es.js":
+/*!**************************************************************!*\
+  !*** ./node_modules/prosemirror-dropcursor/dist/index.es.js ***!
+  \**************************************************************/
+/*! exports provided: dropCursor */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "dropCursor", function() { return dropCursor; });
+/* harmony import */ var prosemirror_state__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.es.js");
+/* harmony import */ var prosemirror_transform__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! prosemirror-transform */ "./node_modules/prosemirror-transform/dist/index.es.js");
 
 
-Object.defineProperty(exports, '__esModule', { value: true });
-
-var prosemirrorState = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.js");
-var prosemirrorTransform = __webpack_require__(/*! prosemirror-transform */ "./node_modules/prosemirror-transform/dist/index.js");
 
 // :: (options: ?Object) → Plugin
 // Create a plugin that, when added to a ProseMirror instance,
@@ -39954,7 +40299,7 @@ var prosemirrorTransform = __webpack_require__(/*! prosemirror-transform */ "./n
 function dropCursor(options) {
   if ( options === void 0 ) options = {};
 
-  return new prosemirrorState.Plugin({
+  return new prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["Plugin"]({
     view: function view(editorView) { return new DropCursorView(editorView, options) }
   })
 }
@@ -40047,7 +40392,7 @@ DropCursorView.prototype.dragover = function dragover (event) {
   if (pos) {
     var target = pos.pos;
     if (this.editorView.dragging && this.editorView.dragging.slice) {
-      target = prosemirrorTransform.dropPoint(this.editorView.state.doc, target, this.editorView.dragging.slice);
+      target = Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_1__["dropPoint"])(this.editorView.state.doc, target, this.editorView.dragging.slice);
       if (target == null) { target = pos.pos; }
     }
     this.setCursor(target);
@@ -40068,46 +40413,49 @@ DropCursorView.prototype.dragleave = function dragleave (event) {
     { this.setCursor(null); }
 };
 
-exports.dropCursor = dropCursor;
-//# sourceMappingURL=dropcursor.js.map
+
+//# sourceMappingURL=index.es.js.map
 
 
 /***/ }),
 
-/***/ "./node_modules/prosemirror-gapcursor/dist/index.js":
-/*!**********************************************************!*\
-  !*** ./node_modules/prosemirror-gapcursor/dist/index.js ***!
-  \**********************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
+/***/ "./node_modules/prosemirror-gapcursor/dist/index.es.js":
+/*!*************************************************************!*\
+  !*** ./node_modules/prosemirror-gapcursor/dist/index.es.js ***!
+  \*************************************************************/
+/*! exports provided: GapCursor, gapCursor */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "GapCursor", function() { return GapCursor; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "gapCursor", function() { return gapCursor; });
+/* harmony import */ var prosemirror_keymap__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! prosemirror-keymap */ "./node_modules/prosemirror-keymap/dist/index.es.js");
+/* harmony import */ var prosemirror_state__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.es.js");
+/* harmony import */ var prosemirror_view__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! prosemirror-view */ "./node_modules/prosemirror-view/dist/index.es.js");
+/* harmony import */ var prosemirror_model__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.es.js");
 
 
-Object.defineProperty(exports, '__esModule', { value: true });
 
-var prosemirrorKeymap = __webpack_require__(/*! prosemirror-keymap */ "./node_modules/prosemirror-keymap/dist/keymap.js");
-var prosemirrorState = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.js");
-var prosemirrorView = __webpack_require__(/*! prosemirror-view */ "./node_modules/prosemirror-view/dist/index.js");
-var prosemirrorModel = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.js");
+
 
 // ::- Gap cursor selections are represented using this class. Its
 // `$anchor` and `$head` properties both point at the cursor position.
-var GapCursor = (function (Selection$$1) {
+var GapCursor = /*@__PURE__*/(function (Selection) {
   function GapCursor($pos) {
-    Selection$$1.call(this, $pos, $pos);
+    Selection.call(this, $pos, $pos);
   }
 
-  if ( Selection$$1 ) GapCursor.__proto__ = Selection$$1;
-  GapCursor.prototype = Object.create( Selection$$1 && Selection$$1.prototype );
+  if ( Selection ) GapCursor.__proto__ = Selection;
+  GapCursor.prototype = Object.create( Selection && Selection.prototype );
   GapCursor.prototype.constructor = GapCursor;
 
   GapCursor.prototype.map = function map (doc, mapping) {
     var $pos = doc.resolve(mapping.map(this.head));
-    return GapCursor.valid($pos) ? new GapCursor($pos) : Selection$$1.near($pos)
+    return GapCursor.valid($pos) ? new GapCursor($pos) : Selection.near($pos)
   };
 
-  GapCursor.prototype.content = function content () { return prosemirrorModel.Slice.empty };
+  GapCursor.prototype.content = function content () { return prosemirror_model__WEBPACK_IMPORTED_MODULE_3__["Slice"].empty };
 
   GapCursor.prototype.eq = function eq (other) {
     return other instanceof GapCursor && other.head == this.head
@@ -40164,11 +40512,11 @@ var GapCursor = (function (Selection$$1) {
   };
 
   return GapCursor;
-}(prosemirrorState.Selection));
+}(prosemirror_state__WEBPACK_IMPORTED_MODULE_1__["Selection"]));
 
 GapCursor.prototype.visible = false;
 
-prosemirrorState.Selection.jsonID("gapcursor", GapCursor);
+prosemirror_state__WEBPACK_IMPORTED_MODULE_1__["Selection"].jsonID("gapcursor", GapCursor);
 
 var GapBookmark = function GapBookmark(pos) {
   this.pos = pos;
@@ -40178,7 +40526,7 @@ GapBookmark.prototype.map = function map (mapping) {
 };
 GapBookmark.prototype.resolve = function resolve (doc) {
   var $pos = doc.resolve(this.pos);
-  return GapCursor.valid($pos) ? new GapCursor($pos) : prosemirrorState.Selection.near($pos)
+  return GapCursor.valid($pos) ? new GapCursor($pos) : prosemirror_state__WEBPACK_IMPORTED_MODULE_1__["Selection"].near($pos)
 };
 
 function closedBefore($pos) {
@@ -40217,7 +40565,7 @@ function closedAfter($pos) {
 // `style/gapcursor.css` from the package's directory or add your own
 // styles to make it visible.
 var gapCursor = function() {
-  return new prosemirrorState.Plugin({
+  return new prosemirror_state__WEBPACK_IMPORTED_MODULE_1__["Plugin"]({
     props: {
       decorations: drawGapCursor,
 
@@ -40231,7 +40579,7 @@ var gapCursor = function() {
   })
 };
 
-var handleKeyDown = prosemirrorKeymap.keydownHandler({
+var handleKeyDown = Object(prosemirror_keymap__WEBPACK_IMPORTED_MODULE_0__["keydownHandler"])({
   "ArrowLeft": arrow("horiz", -1),
   "ArrowRight": arrow("horiz", 1),
   "ArrowUp": arrow("vert", -1),
@@ -40243,7 +40591,7 @@ function arrow(axis, dir) {
   return function(state, dispatch, view) {
     var sel = state.selection;
     var $start = dir > 0 ? sel.$to : sel.$from, mustMove = sel.empty;
-    if (sel instanceof prosemirrorState.TextSelection) {
+    if (sel instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_1__["TextSelection"]) {
       if (!view.endOfTextblock(dirStr)) { return false }
       mustMove = false;
       $start = state.doc.resolve(dir > 0 ? $start.after() : $start.before());
@@ -40256,12 +40604,12 @@ function arrow(axis, dir) {
 }
 
 function handleClick(view, pos, event) {
-  if (view.someProp("editable", function (editable) { return editable(view.state) === false; })) { return false }
+  if (!view.editable) { return false }
   var $pos = view.state.doc.resolve(pos);
   if (!GapCursor.valid($pos)) { return false }
   var ref = view.posAtCoords({left: event.clientX, top: event.clientY});
   var inside = ref.inside;
-  if (inside > -1 && prosemirrorState.NodeSelection.isSelectable(view.state.doc.nodeAt(inside))) { return false }
+  if (inside > -1 && prosemirror_state__WEBPACK_IMPORTED_MODULE_1__["NodeSelection"].isSelectable(view.state.doc.nodeAt(inside))) { return false }
   view.dispatch(view.state.tr.setSelection(new GapCursor($pos)));
   return true
 }
@@ -40270,33 +40618,37 @@ function drawGapCursor(state) {
   if (!(state.selection instanceof GapCursor)) { return null }
   var node = document.createElement("div");
   node.className = "ProseMirror-gapcursor";
-  return prosemirrorView.DecorationSet.create(state.doc, [prosemirrorView.Decoration.widget(state.selection.head, node, {key: "gapcursor"})])
+  return prosemirror_view__WEBPACK_IMPORTED_MODULE_2__["DecorationSet"].create(state.doc, [prosemirror_view__WEBPACK_IMPORTED_MODULE_2__["Decoration"].widget(state.selection.head, node, {key: "gapcursor"})])
 }
 
-exports.gapCursor = gapCursor;
-exports.GapCursor = GapCursor;
-//# sourceMappingURL=index.js.map
+
+//# sourceMappingURL=index.es.js.map
 
 
 /***/ }),
 
-/***/ "./node_modules/prosemirror-history/dist/history.js":
-/*!**********************************************************!*\
-  !*** ./node_modules/prosemirror-history/dist/history.js ***!
-  \**********************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
+/***/ "./node_modules/prosemirror-history/dist/index.es.js":
+/*!***********************************************************!*\
+  !*** ./node_modules/prosemirror-history/dist/index.es.js ***!
+  \***********************************************************/
+/*! exports provided: HistoryState, closeHistory, history, redo, redoDepth, undo, undoDepth */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "HistoryState", function() { return HistoryState; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "closeHistory", function() { return closeHistory; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "history", function() { return history; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "redo", function() { return redo; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "redoDepth", function() { return redoDepth; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "undo", function() { return undo; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "undoDepth", function() { return undoDepth; });
+/* harmony import */ var rope_sequence__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! rope-sequence */ "./node_modules/rope-sequence/dist/index.es.js");
+/* harmony import */ var prosemirror_transform__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! prosemirror-transform */ "./node_modules/prosemirror-transform/dist/index.es.js");
+/* harmony import */ var prosemirror_state__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.es.js");
 
 
-Object.defineProperty(exports, '__esModule', { value: true });
 
-function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
-
-var RopeSequence = _interopDefault(__webpack_require__(/*! rope-sequence */ "./node_modules/rope-sequence/dist/index.js"));
-var prosemirrorTransform = __webpack_require__(/*! prosemirror-transform */ "./node_modules/prosemirror-transform/dist/index.js");
-var prosemirrorState = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.js");
 
 // ProseMirror's history isn't simply a way to roll back to a previous
 // state, because ProseMirror supports applying changes without adding
@@ -40332,7 +40684,7 @@ Branch.prototype.popEvent = function popEvent (state, preserveItems) {
 
   var end = this.items.length;
   for (;; end--) {
-    var next = this$1.items.get(end - 1);
+    var next = this.items.get(end - 1);
     if (next.selection) { --end; break }
   }
 
@@ -40410,7 +40762,7 @@ Branch.prototype.addTransform = function addTransform (transform, selection, his
 };
 
 Branch.prototype.remapping = function remapping (from, to) {
-  var maps = new prosemirrorTransform.Mapping;
+  var maps = new prosemirror_transform__WEBPACK_IMPORTED_MODULE_1__["Mapping"];
   this.items.forEach(function (item, i) {
     var mirrorPos = item.mirrorOffset != null && i - item.mirrorOffset >= from
         ? mirrorPos = maps.maps.length - item.mirrorOffset : null;
@@ -40504,10 +40856,10 @@ Branch.prototype.compress = function compress (upto) {
       mapFrom--;
     }
   }, this.items.length, 0);
-  return new Branch(RopeSequence.from(items.reverse()), events)
+  return new Branch(rope_sequence__WEBPACK_IMPORTED_MODULE_0__["default"].from(items.reverse()), events)
 };
 
-Branch.empty = new Branch(RopeSequence.empty, 0);
+Branch.empty = new Branch(rope_sequence__WEBPACK_IMPORTED_MODULE_0__["default"].empty, 0);
 
 function cutOffEvents(items, n) {
   var cutPoint;
@@ -40521,9 +40873,16 @@ function cutOffEvents(items, n) {
 }
 
 var Item = function Item(map, step, selection, mirrorOffset) {
+  // The (forward) step map for this item.
   this.map = map;
+  // The inverted step
   this.step = step;
+  // If this is non-null, this item is the start of a group, and
+  // this selection is the starting selection for the group (the one
+  // that was active before the first step was applied)
   this.selection = selection;
+  // If this item is the inverse of a previous mapping on the stack,
+  // this points at the inverse's offset
   this.mirrorOffset = mirrorOffset;
 };
 
@@ -40567,8 +40926,8 @@ function applyTransaction(history, state, tr, options) {
                               null, history.prevTime) }
   } else if (tr.getMeta("addToHistory") !== false && !(appended && appended.getMeta("addToHistory") === false)) {
     // Group transforms that occur in quick succession into one event.
-    var newGroup = history.prevTime < (tr.time || 0) - options.newGroupDelay ||
-        !appended && !isAdjacentTo(tr, history.prevRanges);
+    var newGroup = !appended && (history.prevTime < (tr.time || 0) - options.newGroupDelay ||
+                                 !isAdjacentTo(tr, history.prevRanges));
     var prevRanges = appended ? mapRanges(history.prevRanges, tr.mapping) : rangesFor(tr.mapping.maps[tr.steps.length - 1]);
     return new HistoryState(history.done.addTransform(tr, newGroup ? state.selection.getBookmark() : null,
                                                       options, mustPreserveItems(state)),
@@ -40630,8 +40989,7 @@ function histTransaction(history, state, dispatch, redo) {
   dispatch(pop.transform.setSelection(selection).setMeta(historyKey, {redo: redo, historyState: newHist}).scrollIntoView());
 }
 
-var cachedPreserveItems = false;
-var cachedPreserveItemsPlugins = null;
+var cachedPreserveItems = false, cachedPreserveItemsPlugins = null;
 // Check whether any plugin in the given state has a
 // `historyPreserveItems` property in its spec, in which case we must
 // preserve steps exactly as they came in, so that they can be
@@ -40657,8 +41015,8 @@ function closeHistory(tr) {
   return tr.setMeta(closeHistoryKey, true)
 }
 
-var historyKey = new prosemirrorState.PluginKey("history");
-var closeHistoryKey = new prosemirrorState.PluginKey("closeHistory");
+var historyKey = new prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["PluginKey"]("history");
+var closeHistoryKey = new prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["PluginKey"]("closeHistory");
 
 // :: (?Object) → Plugin
 // Returns a plugin that enables the undo history for an editor. The
@@ -40683,7 +41041,7 @@ var closeHistoryKey = new prosemirrorState.PluginKey("closeHistory");
 function history(config) {
   config = {depth: config && config.depth || 100,
             newGroupDelay: config && config.newGroupDelay || 500};
-  return new prosemirrorState.Plugin({
+  return new prosemirror_state__WEBPACK_IMPORTED_MODULE_2__["Plugin"]({
     key: historyKey,
 
     state: {
@@ -40731,32 +41089,37 @@ function redoDepth(state) {
   return hist ? hist.undone.eventCount : 0
 }
 
-exports.HistoryState = HistoryState;
-exports.closeHistory = closeHistory;
-exports.history = history;
-exports.undo = undo;
-exports.redo = redo;
-exports.undoDepth = undoDepth;
-exports.redoDepth = redoDepth;
-//# sourceMappingURL=history.js.map
+
+//# sourceMappingURL=index.es.js.map
 
 
 /***/ }),
 
-/***/ "./node_modules/prosemirror-inputrules/dist/index.js":
-/*!***********************************************************!*\
-  !*** ./node_modules/prosemirror-inputrules/dist/index.js ***!
-  \***********************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
+/***/ "./node_modules/prosemirror-inputrules/dist/index.es.js":
+/*!**************************************************************!*\
+  !*** ./node_modules/prosemirror-inputrules/dist/index.es.js ***!
+  \**************************************************************/
+/*! exports provided: InputRule, closeDoubleQuote, closeSingleQuote, ellipsis, emDash, inputRules, openDoubleQuote, openSingleQuote, smartQuotes, textblockTypeInputRule, undoInputRule, wrappingInputRule */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "InputRule", function() { return InputRule; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "closeDoubleQuote", function() { return closeDoubleQuote; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "closeSingleQuote", function() { return closeSingleQuote; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "ellipsis", function() { return ellipsis; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "emDash", function() { return emDash; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "inputRules", function() { return inputRules; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "openDoubleQuote", function() { return openDoubleQuote; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "openSingleQuote", function() { return openSingleQuote; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "smartQuotes", function() { return smartQuotes; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "textblockTypeInputRule", function() { return textblockTypeInputRule; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "undoInputRule", function() { return undoInputRule; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "wrappingInputRule", function() { return wrappingInputRule; });
+/* harmony import */ var prosemirror_state__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.es.js");
+/* harmony import */ var prosemirror_transform__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! prosemirror-transform */ "./node_modules/prosemirror-transform/dist/index.es.js");
 
 
-Object.defineProperty(exports, '__esModule', { value: true });
-
-var prosemirrorState = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.js");
-var prosemirrorTransform = __webpack_require__(/*! prosemirror-transform */ "./node_modules/prosemirror-transform/dist/index.js");
 
 // ::- Input rules are regular expressions describing a piece of text
 // that, when typed, causes something to happen. This might be
@@ -40793,7 +41156,7 @@ var MAX_MATCH = 500;
 function inputRules(ref) {
   var rules = ref.rules;
 
-  var plugin = new prosemirrorState.Plugin({
+  var plugin = new prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["Plugin"]({
     state: {
       init: function init() { return null },
       apply: function apply(tr, prev) {
@@ -40896,11 +41259,11 @@ function wrappingInputRule(regexp, nodeType, getAttrs, joinPredicate) {
   return new InputRule(regexp, function (state, match, start, end) {
     var attrs = getAttrs instanceof Function ? getAttrs(match) : getAttrs;
     var tr = state.tr.delete(start, end);
-    var $start = tr.doc.resolve(start), range = $start.blockRange(), wrapping = range && prosemirrorTransform.findWrapping(range, nodeType, attrs);
+    var $start = tr.doc.resolve(start), range = $start.blockRange(), wrapping = range && Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_1__["findWrapping"])(range, nodeType, attrs);
     if (!wrapping) { return null }
     tr.wrap(range, wrapping);
     var before = tr.doc.resolve(start - 1).nodeBefore;
-    if (before && before.type == nodeType && prosemirrorTransform.canJoin(tr.doc, start - 1) &&
+    if (before && before.type == nodeType && Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_1__["canJoin"])(tr.doc, start - 1) &&
         (!joinPredicate || joinPredicate(match, before)))
       { tr.join(start - 1); }
     return tr
@@ -40925,37 +41288,27 @@ function textblockTypeInputRule(regexp, nodeType, getAttrs) {
   })
 }
 
-exports.InputRule = InputRule;
-exports.inputRules = inputRules;
-exports.undoInputRule = undoInputRule;
-exports.emDash = emDash;
-exports.ellipsis = ellipsis;
-exports.openDoubleQuote = openDoubleQuote;
-exports.closeDoubleQuote = closeDoubleQuote;
-exports.openSingleQuote = openSingleQuote;
-exports.closeSingleQuote = closeSingleQuote;
-exports.smartQuotes = smartQuotes;
-exports.wrappingInputRule = wrappingInputRule;
-exports.textblockTypeInputRule = textblockTypeInputRule;
-//# sourceMappingURL=index.js.map
+
+//# sourceMappingURL=index.es.js.map
 
 
 /***/ }),
 
-/***/ "./node_modules/prosemirror-keymap/dist/keymap.js":
-/*!********************************************************!*\
-  !*** ./node_modules/prosemirror-keymap/dist/keymap.js ***!
-  \********************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
+/***/ "./node_modules/prosemirror-keymap/dist/index.es.js":
+/*!**********************************************************!*\
+  !*** ./node_modules/prosemirror-keymap/dist/index.es.js ***!
+  \**********************************************************/
+/*! exports provided: keydownHandler, keymap */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "keydownHandler", function() { return keydownHandler; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "keymap", function() { return keymap; });
+/* harmony import */ var w3c_keyname__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! w3c-keyname */ "./node_modules/w3c-keyname/index.es.js");
+/* harmony import */ var prosemirror_state__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.es.js");
 
 
-Object.defineProperty(exports, '__esModule', { value: true });
-
-var w3cKeyname = __webpack_require__(/*! w3c-keyname */ "./node_modules/w3c-keyname/index.js");
-var prosemirrorState = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.js");
 
 // declare global: navigator
 
@@ -41026,7 +41379,7 @@ function modifiers(name, event, shift) {
 // which they appear determines their precedence (the ones early in
 // the array get to dispatch first).
 function keymap(bindings) {
-  return new prosemirrorState.Plugin({props: {handleKeyDown: keydownHandler(bindings)}})
+  return new prosemirror_state__WEBPACK_IMPORTED_MODULE_1__["Plugin"]({props: {handleKeyDown: keydownHandler(bindings)}})
 }
 
 // :: (Object) → (view: EditorView, event: dom.Event) → bool
@@ -41036,40 +41389,51 @@ function keymap(bindings) {
 function keydownHandler(bindings) {
   var map = normalize(bindings);
   return function(view, event) {
-    var name = w3cKeyname.keyName(event), isChar = name.length == 1 && name != " ", baseName;
+    var name = Object(w3c_keyname__WEBPACK_IMPORTED_MODULE_0__["keyName"])(event), isChar = name.length == 1 && name != " ", baseName;
     var direct = map[modifiers(name, event, !isChar)];
     if (direct && direct(view.state, view.dispatch, view)) { return true }
     if (isChar && (event.shiftKey || event.altKey || event.metaKey) &&
-        (baseName = w3cKeyname.base[event.keyCode]) && baseName != name) {
+        (baseName = w3c_keyname__WEBPACK_IMPORTED_MODULE_0__["base"][event.keyCode]) && baseName != name) {
       var fromCode = map[modifiers(baseName, event, true)];
       if (fromCode && fromCode(view.state, view.dispatch, view)) { return true }
+    } else if (isChar && event.shiftKey) {
+      var withShift = map[modifiers(name, event, true)];
+      if (withShift && withShift(view.state, view.dispatch, view)) { return true }
     }
     return false
   }
 }
 
-exports.keymap = keymap;
-exports.keydownHandler = keydownHandler;
-//# sourceMappingURL=keymap.js.map
+
+//# sourceMappingURL=index.es.js.map
 
 
 /***/ }),
 
-/***/ "./node_modules/prosemirror-model/dist/index.js":
-/*!******************************************************!*\
-  !*** ./node_modules/prosemirror-model/dist/index.js ***!
-  \******************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
+/***/ "./node_modules/prosemirror-model/dist/index.es.js":
+/*!*********************************************************!*\
+  !*** ./node_modules/prosemirror-model/dist/index.es.js ***!
+  \*********************************************************/
+/*! exports provided: ContentMatch, DOMParser, DOMSerializer, Fragment, Mark, MarkType, Node, NodeRange, NodeType, ReplaceError, ResolvedPos, Schema, Slice */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "ContentMatch", function() { return ContentMatch; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "DOMParser", function() { return DOMParser; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "DOMSerializer", function() { return DOMSerializer; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Fragment", function() { return Fragment; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Mark", function() { return Mark; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "MarkType", function() { return MarkType; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Node", function() { return Node; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "NodeRange", function() { return NodeRange; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "NodeType", function() { return NodeType; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "ReplaceError", function() { return ReplaceError; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "ResolvedPos", function() { return ResolvedPos; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Schema", function() { return Schema; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Slice", function() { return Slice; });
+/* harmony import */ var orderedmap__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! orderedmap */ "./node_modules/orderedmap/index.mjs");
 
-
-Object.defineProperty(exports, '__esModule', { value: true });
-
-function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
-
-var OrderedMap = _interopDefault(__webpack_require__(/*! orderedmap */ "./node_modules/orderedmap/index.js"));
 
 function findDiffStart(a, b, pos) {
   for (var i = 0;; i++) {
@@ -41128,29 +41492,26 @@ function findDiffEnd(a, b, posA, posB) {
 // should not mutate them or their content. Rather, you create new
 // instances whenever needed. The API tries to make this easy.
 var Fragment = function Fragment(content, size) {
-  var this$1 = this;
-
   this.content = content;
   // :: number
   // The size of the fragment, which is the total of the size of its
   // content nodes.
   this.size = size || 0;
   if (size == null) { for (var i = 0; i < content.length; i++)
-    { this$1.size += content[i].nodeSize; } }
+    { this.size += content[i].nodeSize; } }
 };
 
-var prototypeAccessors$1 = { firstChild: {},lastChild: {},childCount: {} };
+var prototypeAccessors = { firstChild: { configurable: true },lastChild: { configurable: true },childCount: { configurable: true } };
 
 // :: (number, number, (node: Node, start: number, parent: Node, index: number) → ?bool, ?number)
 // Invoke a callback for all descendant nodes between the given two
 // positions (relative to start of this fragment). Doesn't descend
 // into a node when the callback returns `false`.
 Fragment.prototype.nodesBetween = function nodesBetween (from, to, f, nodeStart, parent) {
-    var this$1 = this;
     if ( nodeStart === void 0 ) nodeStart = 0;
 
   for (var i = 0, pos = 0; pos < to; i++) {
-    var child = this$1.content[i], end = pos + child.nodeSize;
+    var child = this.content[i], end = pos + child.nodeSize;
     if (end > from && f(child, nodeStart + pos, parent, i) !== false && child.content.size) {
       var start = pos + 1;
       child.nodesBetween(Math.max(0, from - start),
@@ -41204,13 +41565,11 @@ Fragment.prototype.append = function append (other) {
 // :: (number, ?number) → Fragment
 // Cut out the sub-fragment between the two given positions.
 Fragment.prototype.cut = function cut (from, to) {
-    var this$1 = this;
-
   if (to == null) { to = this.size; }
   if (from == 0 && to == this.size) { return this }
   var result = [], size = 0;
   if (to > from) { for (var i = 0, pos = 0; pos < to; i++) {
-    var child = this$1.content[i], end = pos + child.nodeSize;
+    var child = this.content[i], end = pos + child.nodeSize;
     if (end > from) {
       if (pos < from || end > to) {
         if (child.isText)
@@ -41261,25 +41620,23 @@ Fragment.prototype.addToEnd = function addToEnd (node) {
 // :: (Fragment) → bool
 // Compare this fragment to another one.
 Fragment.prototype.eq = function eq (other) {
-    var this$1 = this;
-
   if (this.content.length != other.content.length) { return false }
   for (var i = 0; i < this.content.length; i++)
-    { if (!this$1.content[i].eq(other.content[i])) { return false } }
+    { if (!this.content[i].eq(other.content[i])) { return false } }
   return true
 };
 
 // :: ?Node
 // The first child of the fragment, or `null` if it is empty.
-prototypeAccessors$1.firstChild.get = function () { return this.content.length ? this.content[0] : null };
+prototypeAccessors.firstChild.get = function () { return this.content.length ? this.content[0] : null };
 
 // :: ?Node
 // The last child of the fragment, or `null` if it is empty.
-prototypeAccessors$1.lastChild.get = function () { return this.content.length ? this.content[this.content.length - 1] : null };
+prototypeAccessors.lastChild.get = function () { return this.content.length ? this.content[this.content.length - 1] : null };
 
 // :: number
 // The number of child nodes in this fragment.
-prototypeAccessors$1.childCount.get = function () { return this.content.length };
+prototypeAccessors.childCount.get = function () { return this.content.length };
 
 // :: (number) → Node
 // Get the child node at the given index. Raise an error when the
@@ -41300,10 +41657,8 @@ Fragment.prototype.maybeChild = function maybeChild (index) {
 // Call `f` for every child node, passing the node, its offset
 // into this parent node, and its index.
 Fragment.prototype.forEach = function forEach (f) {
-    var this$1 = this;
-
   for (var i = 0, p = 0; i < this.content.length; i++) {
-    var child = this$1.content[i];
+    var child = this.content[i];
     f(child, p, i);
     p += child.nodeSize;
   }
@@ -41335,14 +41690,13 @@ Fragment.prototype.findDiffEnd = function findDiffEnd$1 (other, pos, otherPos) {
 // position in this fragment. The result object will be reused
 // (overwritten) the next time the function is called. (Not public.)
 Fragment.prototype.findIndex = function findIndex (pos, round) {
-    var this$1 = this;
     if ( round === void 0 ) round = -1;
 
   if (pos == 0) { return retIndex(0, pos) }
   if (pos == this.size) { return retIndex(this.content.length, pos) }
   if (pos > this.size || pos < 0) { throw new RangeError(("Position " + pos + " outside of fragment (" + (this) + ")")) }
   for (var i = 0, curPos = 0;; i++) {
-    var cur = this$1.child(i), end = curPos + cur.nodeSize;
+    var cur = this.child(i), end = curPos + cur.nodeSize;
     if (end >= pos) {
       if (end == pos || round > 0) { return retIndex(i + 1, end) }
       return retIndex(i, curPos)
@@ -41404,7 +41758,7 @@ Fragment.from = function from (nodes) {
                        (nodes.nodesBetween ? " (looks like multiple versions of prosemirror-model were loaded)" : ""))
 };
 
-Object.defineProperties( Fragment.prototype, prototypeAccessors$1 );
+Object.defineProperties( Fragment.prototype, prototypeAccessors );
 
 var found = {index: 0, offset: 0};
 function retIndex(index, offset) {
@@ -41457,20 +41811,18 @@ var Mark = function Mark(type, attrs) {
 // [exclusive](#model.MarkSpec.excludes) with this mark are present,
 // those are replaced by this one.
 Mark.prototype.addToSet = function addToSet (set) {
-    var this$1 = this;
-
   var copy, placed = false;
   for (var i = 0; i < set.length; i++) {
     var other = set[i];
-    if (this$1.eq(other)) { return set }
-    if (this$1.type.excludes(other.type)) {
+    if (this.eq(other)) { return set }
+    if (this.type.excludes(other.type)) {
       if (!copy) { copy = set.slice(0, i); }
-    } else if (other.type.excludes(this$1.type)) {
+    } else if (other.type.excludes(this.type)) {
       return set
     } else {
-      if (!placed && other.type.rank > this$1.type.rank) {
+      if (!placed && other.type.rank > this.type.rank) {
         if (!copy) { copy = set.slice(0, i); }
-        copy.push(this$1);
+        copy.push(this);
         placed = true;
       }
       if (copy) { copy.push(other); }
@@ -41485,10 +41837,8 @@ Mark.prototype.addToSet = function addToSet (set) {
 // Remove this mark from the given set, returning a new set. If this
 // mark is not in the set, the set itself is returned.
 Mark.prototype.removeFromSet = function removeFromSet (set) {
-    var this$1 = this;
-
   for (var i = 0; i < set.length; i++)
-    { if (this$1.eq(set[i]))
+    { if (this.eq(set[i]))
       { return set.slice(0, i).concat(set.slice(i + 1)) } }
   return set
 };
@@ -41496,10 +41846,8 @@ Mark.prototype.removeFromSet = function removeFromSet (set) {
 // :: ([Mark]) → bool
 // Test whether this mark is in the given set of marks.
 Mark.prototype.isInSet = function isInSet (set) {
-    var this$1 = this;
-
   for (var i = 0; i < set.length; i++)
-    { if (this$1.eq(set[i])) { return true } }
+    { if (this.eq(set[i])) { return true } }
   return false
 };
 
@@ -41514,11 +41862,9 @@ Mark.prototype.eq = function eq (other) {
 // :: () → Object
 // Convert this mark to a JSON-serializeable representation.
 Mark.prototype.toJSON = function toJSON () {
-    var this$1 = this;
-
   var obj = {type: this.type.name};
-  for (var _ in this$1.attrs) {
-    obj.attrs = this$1.attrs;
+  for (var _ in this.attrs) {
+    obj.attrs = this.attrs;
     break
   }
   return obj
@@ -41582,11 +41928,11 @@ var Slice = function Slice(content, openStart, openEnd) {
   this.openEnd = openEnd;
 };
 
-var prototypeAccessors$2 = { size: {} };
+var prototypeAccessors$1 = { size: { configurable: true } };
 
 // :: number
 // The size this slice would add when inserted into a document.
-prototypeAccessors$2.size.get = function () {
+prototypeAccessors$1.size.get = function () {
   return this.content.size - this.openStart - this.openEnd
 };
 
@@ -41641,7 +41987,7 @@ Slice.maxOpen = function maxOpen (fragment, openIsolating) {
   return new Slice(fragment, openStart, openEnd)
 };
 
-Object.defineProperties( Slice.prototype, prototypeAccessors$2 );
+Object.defineProperties( Slice.prototype, prototypeAccessors$1 );
 
 function removeRange(content, from, to) {
   var ref = content.findIndex(from);
@@ -41805,7 +42151,7 @@ var ResolvedPos = function ResolvedPos(pos, path, parentOffset) {
   this.parentOffset = parentOffset;
 };
 
-var prototypeAccessors$3 = { parent: {},doc: {},textOffset: {},nodeAfter: {},nodeBefore: {} };
+var prototypeAccessors$2 = { parent: { configurable: true },doc: { configurable: true },textOffset: { configurable: true },nodeAfter: { configurable: true },nodeBefore: { configurable: true } };
 
 ResolvedPos.prototype.resolveDepth = function resolveDepth (val) {
   if (val == null) { return this.depth }
@@ -41817,11 +42163,11 @@ ResolvedPos.prototype.resolveDepth = function resolveDepth (val) {
 // The parent node that the position points into. Note that even if
 // a position points into a text node, that node is not considered
 // the parent—text nodes are ‘flat’ in this model, and have no content.
-prototypeAccessors$3.parent.get = function () { return this.node(this.depth) };
+prototypeAccessors$2.parent.get = function () { return this.node(this.depth) };
 
 // :: Node
 // The root node in which the position was resolved.
-prototypeAccessors$3.doc.get = function () { return this.node(0) };
+prototypeAccessors$2.doc.get = function () { return this.node(0) };
 
 // :: (?number) → Node
 // The ancestor node at the given level. `p.node(p.depth)` is the
@@ -41831,7 +42177,7 @@ ResolvedPos.prototype.node = function node (depth) { return this.path[this.resol
 // :: (?number) → number
 // The index into the ancestor at the given level. If this points at
 // the 3rd node in the 2nd paragraph on the top level, for example,
-// `p.index(0)` is 2 and `p.index(1)` is 3.
+// `p.index(0)` is 1 and `p.index(1)` is 2.
 ResolvedPos.prototype.index = function index (depth) { return this.path[this.resolveDepth(depth) * 3 + 1] };
 
 // :: (?number) → number
@@ -41881,13 +42227,13 @@ ResolvedPos.prototype.after = function after (depth) {
 // When this position points into a text node, this returns the
 // distance between the position and the start of the text node.
 // Will be zero for positions that point between nodes.
-prototypeAccessors$3.textOffset.get = function () { return this.pos - this.path[this.path.length - 1] };
+prototypeAccessors$2.textOffset.get = function () { return this.pos - this.path[this.path.length - 1] };
 
 // :: ?Node
 // Get the node directly after the position, if any. If the position
 // points into a text node, only the part of that node after the
 // position is returned.
-prototypeAccessors$3.nodeAfter.get = function () {
+prototypeAccessors$2.nodeAfter.get = function () {
   var parent = this.parent, index = this.index(this.depth);
   if (index == parent.childCount) { return null }
   var dOff = this.pos - this.path[this.path.length - 1], child = parent.child(index);
@@ -41898,7 +42244,7 @@ prototypeAccessors$3.nodeAfter.get = function () {
 // Get the node directly before the position, if any. If the
 // position points into a text node, only the part of that node
 // before the position is returned.
-prototypeAccessors$3.nodeBefore.get = function () {
+prototypeAccessors$2.nodeBefore.get = function () {
   var index = this.index(this.depth);
   var dOff = this.pos - this.path[this.path.length - 1];
   if (dOff) { return this.parent.child(index).cut(0, dOff) }
@@ -41956,10 +42302,8 @@ ResolvedPos.prototype.marksAcross = function marksAcross ($end) {
 // The depth up to which this position and the given (non-resolved)
 // position share the same parent nodes.
 ResolvedPos.prototype.sharedDepth = function sharedDepth (pos) {
-    var this$1 = this;
-
   for (var depth = this.depth; depth > 0; depth--)
-    { if (this$1.start(depth) <= pos && this$1.end(depth) >= pos) { return depth } }
+    { if (this.start(depth) <= pos && this.end(depth) >= pos) { return depth } }
   return 0
 };
 
@@ -41972,13 +42316,12 @@ ResolvedPos.prototype.sharedDepth = function sharedDepth (pos) {
 // pass in an optional predicate that will be called with a parent
 // node to see if a range into that parent is acceptable.
 ResolvedPos.prototype.blockRange = function blockRange (other, pred) {
-    var this$1 = this;
     if ( other === void 0 ) other = this;
 
   if (other.pos < this.pos) { return other.blockRange(this) }
   for (var d = this.depth - (this.parent.inlineContent || this.pos == other.pos ? 1 : 0); d >= 0; d--)
-    { if (other.pos <= this$1.end(d) && (!pred || pred(this$1.node(d))))
-      { return new NodeRange(this$1, other, d) } }
+    { if (other.pos <= this.end(d) && (!pred || pred(this.node(d))))
+      { return new NodeRange(this, other, d) } }
 };
 
 // :: (ResolvedPos) → bool
@@ -42000,11 +42343,9 @@ ResolvedPos.prototype.min = function min (other) {
 };
 
 ResolvedPos.prototype.toString = function toString () {
-    var this$1 = this;
-
   var str = "";
   for (var i = 1; i <= this.depth; i++)
-    { str += (str ? "/" : "") + this$1.node(i).type.name + "_" + this$1.index(i - 1); }
+    { str += (str ? "/" : "") + this.node(i).type.name + "_" + this.index(i - 1); }
   return str + ":" + this.parentOffset
 };
 
@@ -42037,11 +42378,9 @@ ResolvedPos.resolveCached = function resolveCached (doc, pos) {
   return result
 };
 
-Object.defineProperties( ResolvedPos.prototype, prototypeAccessors$3 );
+Object.defineProperties( ResolvedPos.prototype, prototypeAccessors$2 );
 
-var resolveCache = [];
-var resolveCachePos = 0;
-var resolveCacheSize = 12;
+var resolveCache = [], resolveCachePos = 0, resolveCacheSize = 12;
 
 // ::- Represents a flat range of content, i.e. one that starts and
 // ends in the same node.
@@ -42059,7 +42398,7 @@ var NodeRange = function NodeRange($from, $to, depth) {
   this.depth = depth;
 };
 
-var prototypeAccessors$1$1 = { start: {},end: {},parent: {},startIndex: {},endIndex: {} };
+var prototypeAccessors$1$1 = { start: { configurable: true },end: { configurable: true },parent: { configurable: true },startIndex: { configurable: true },endIndex: { configurable: true } };
 
 // :: number The position at the start of the range.
 prototypeAccessors$1$1.start.get = function () { return this.$from.before(this.depth + 1) };
@@ -42110,7 +42449,7 @@ var Node = function Node(type, attrs, content, marks) {
   this.marks = marks || Mark.none;
 };
 
-var prototypeAccessors = { nodeSize: {},childCount: {},textContent: {},firstChild: {},lastChild: {},isBlock: {},isTextblock: {},inlineContent: {},isInline: {},isText: {},isLeaf: {},isAtom: {} };
+var prototypeAccessors$3 = { nodeSize: { configurable: true },childCount: { configurable: true },textContent: { configurable: true },firstChild: { configurable: true },lastChild: { configurable: true },isBlock: { configurable: true },isTextblock: { configurable: true },inlineContent: { configurable: true },isInline: { configurable: true },isText: { configurable: true },isLeaf: { configurable: true },isAtom: { configurable: true } };
 
 // text:: ?string
 // For text nodes, this contains the node's text content.
@@ -42121,11 +42460,11 @@ var prototypeAccessors = { nodeSize: {},childCount: {},textContent: {},firstChil
 // amount of characters. For other leaf nodes, it is one. For
 // non-leaf nodes, it is the size of the content plus two (the start
 // and end token).
-prototypeAccessors.nodeSize.get = function () { return this.isLeaf ? 1 : 2 + this.content.size };
+prototypeAccessors$3.nodeSize.get = function () { return this.isLeaf ? 1 : 2 + this.content.size };
 
 // :: number
 // The number of children that the node has.
-prototypeAccessors.childCount.get = function () { return this.content.childCount };
+prototypeAccessors$3.childCount.get = function () { return this.content.childCount };
 
 // :: (number) → Node
 // Get the child node at the given index. Raises an error when the
@@ -42165,7 +42504,7 @@ Node.prototype.descendants = function descendants (f) {
 // :: string
 // Concatenates all the text nodes found in this fragment and its
 // children.
-prototypeAccessors.textContent.get = function () { return this.textBetween(0, this.content.size, "") };
+prototypeAccessors$3.textContent.get = function () { return this.textBetween(0, this.content.size, "") };
 
 // :: (number, number, ?string, ?string) → string
 // Get all text between positions `from` and `to`. When
@@ -42179,12 +42518,12 @@ Node.prototype.textBetween = function textBetween (from, to, blockSeparator, lea
 // :: ?Node
 // Returns this node's first child, or `null` if there are no
 // children.
-prototypeAccessors.firstChild.get = function () { return this.content.firstChild };
+prototypeAccessors$3.firstChild.get = function () { return this.content.firstChild };
 
 // :: ?Node
 // Returns this node's last child, or `null` if there are no
 // children.
-prototypeAccessors.lastChild.get = function () { return this.content.lastChild };
+prototypeAccessors$3.lastChild.get = function () { return this.content.lastChild };
 
 // :: (Node) → bool
 // Test whether two nodes represent the same piece of document.
@@ -42321,29 +42660,29 @@ Node.prototype.rangeHasMark = function rangeHasMark (from, to, type) {
 
 // :: bool
 // True when this is a block (non-inline node)
-prototypeAccessors.isBlock.get = function () { return this.type.isBlock };
+prototypeAccessors$3.isBlock.get = function () { return this.type.isBlock };
 
 // :: bool
 // True when this is a textblock node, a block node with inline
 // content.
-prototypeAccessors.isTextblock.get = function () { return this.type.isTextblock };
+prototypeAccessors$3.isTextblock.get = function () { return this.type.isTextblock };
 
 // :: bool
 // True when this node allows inline content.
-prototypeAccessors.inlineContent.get = function () { return this.type.inlineContent };
+prototypeAccessors$3.inlineContent.get = function () { return this.type.inlineContent };
 
 // :: bool
 // True when this is an inline node (a text node or a node that can
 // appear among text).
-prototypeAccessors.isInline.get = function () { return this.type.isInline };
+prototypeAccessors$3.isInline.get = function () { return this.type.isInline };
 
 // :: bool
 // True when this is a text node.
-prototypeAccessors.isText.get = function () { return this.type.isText };
+prototypeAccessors$3.isText.get = function () { return this.type.isText };
 
 // :: bool
 // True when this is a leaf node.
-prototypeAccessors.isLeaf.get = function () { return this.type.isLeaf };
+prototypeAccessors$3.isLeaf.get = function () { return this.type.isLeaf };
 
 // :: bool
 // True when this is an atom, i.e. when it does not have directly
@@ -42351,7 +42690,7 @@ prototypeAccessors.isLeaf.get = function () { return this.type.isLeaf };
 // be configured with the [`atom` property](#model.NodeSpec.atom) on
 // a node's spec (typically used when the node is displayed as an
 // uneditable [node view](#view.NodeView)).
-prototypeAccessors.isAtom.get = function () { return this.type.isAtom };
+prototypeAccessors$3.isAtom.get = function () { return this.type.isAtom };
 
 // :: () → string
 // Return a string representation of this node for debugging
@@ -42379,7 +42718,6 @@ Node.prototype.contentMatchAt = function contentMatchAt (index) {
 // can optionally pass `start` and `end` indices into the
 // replacement fragment.
 Node.prototype.canReplace = function canReplace (from, to, replacement, start, end) {
-    var this$1 = this;
     if ( replacement === void 0 ) replacement = Fragment.empty;
     if ( start === void 0 ) start = 0;
     if ( end === void 0 ) end = replacement.childCount;
@@ -42387,7 +42725,7 @@ Node.prototype.canReplace = function canReplace (from, to, replacement, start, e
   var one = this.contentMatchAt(from).matchFragment(replacement, start, end);
   var two = one && one.matchFragment(this.content, to);
   if (!two || !two.validEnd) { return false }
-  for (var i = start; i < end; i++) { if (!this$1.type.allowsMarks(replacement.child(i).marks)) { return false } }
+  for (var i = start; i < end; i++) { if (!this.type.allowsMarks(replacement.child(i).marks)) { return false } }
   return true
 };
 
@@ -42428,11 +42766,9 @@ Node.prototype.check = function check () {
 // :: () → Object
 // Return a JSON-serializeable representation of this node.
 Node.prototype.toJSON = function toJSON () {
-    var this$1 = this;
-
   var obj = {type: this.type.name};
-  for (var _ in this$1.attrs) {
-    obj.attrs = this$1.attrs;
+  for (var _ in this.attrs) {
+    obj.attrs = this.attrs;
     break
   }
   if (this.content.size)
@@ -42459,9 +42795,9 @@ Node.fromJSON = function fromJSON (schema, json) {
   return schema.nodeType(json.type).create(json.attrs, content, marks)
 };
 
-Object.defineProperties( Node.prototype, prototypeAccessors );
+Object.defineProperties( Node.prototype, prototypeAccessors$3 );
 
-var TextNode = (function (Node) {
+var TextNode = /*@__PURE__*/(function (Node) {
   function TextNode(type, attrs, content, marks) {
     Node.call(this, type, attrs, null, marks);
 
@@ -42474,7 +42810,7 @@ var TextNode = (function (Node) {
   TextNode.prototype = Object.create( Node && Node.prototype );
   TextNode.prototype.constructor = TextNode;
 
-  var prototypeAccessors$1 = { textContent: {},nodeSize: {} };
+  var prototypeAccessors$1 = { textContent: { configurable: true },nodeSize: { configurable: true } };
 
   TextNode.prototype.toString = function toString () {
     if (this.type.spec.toDebugString) { return this.type.spec.toDebugString(this) }
@@ -42537,7 +42873,7 @@ var ContentMatch = function ContentMatch(validEnd) {
   this.wrapCache = [];
 };
 
-var prototypeAccessors$5 = { inlineContent: {},defaultType: {},edgeCount: {} };
+var prototypeAccessors$4 = { inlineContent: { configurable: true },defaultType: { configurable: true },edgeCount: { configurable: true } };
 
 ContentMatch.parse = function parse (string, nodeTypes) {
   var stream = new TokenStream(string, nodeTypes);
@@ -42553,10 +42889,8 @@ ContentMatch.parse = function parse (string, nodeTypes) {
 // Match a node type, returning a match after that node if
 // successful.
 ContentMatch.prototype.matchType = function matchType (type) {
-    var this$1 = this;
-
   for (var i = 0; i < this.next.length; i += 2)
-    { if (this$1.next[i] == type) { return this$1.next[i + 1] } }
+    { if (this.next[i] == type) { return this.next[i + 1] } }
   return null
 };
 
@@ -42573,7 +42907,7 @@ ContentMatch.prototype.matchFragment = function matchFragment (frag, start, end)
   return cur
 };
 
-prototypeAccessors$5.inlineContent.get = function () {
+prototypeAccessors$4.inlineContent.get = function () {
   var first = this.next[0];
   return first ? first.isInline : false
 };
@@ -42581,21 +42915,17 @@ prototypeAccessors$5.inlineContent.get = function () {
 // :: ?NodeType
 // Get the first matching node type at this match position that can
 // be generated.
-prototypeAccessors$5.defaultType.get = function () {
-    var this$1 = this;
-
+prototypeAccessors$4.defaultType.get = function () {
   for (var i = 0; i < this.next.length; i += 2) {
-    var type = this$1.next[i];
+    var type = this.next[i];
     if (!(type.isText || type.hasRequiredAttrs())) { return type }
   }
 };
 
 ContentMatch.prototype.compatible = function compatible (other) {
-    var this$1 = this;
-
   for (var i = 0; i < this.next.length; i += 2)
     { for (var j = 0; j < other.next.length; j += 2)
-      { if (this$1.next[i] == other.next[j]) { return true } } }
+      { if (this.next[i] == other.next[j]) { return true } } }
   return false
 };
 
@@ -42635,10 +42965,8 @@ ContentMatch.prototype.fillBefore = function fillBefore (after, toEnd, startInde
 // (when it fits directly) and will be null when no such wrapping
 // exists.
 ContentMatch.prototype.findWrapping = function findWrapping (target) {
-    var this$1 = this;
-
   for (var i = 0; i < this.wrapCache.length; i += 2)
-    { if (this$1.wrapCache[i] == target) { return this$1.wrapCache[i + 1] } }
+    { if (this.wrapCache[i] == target) { return this.wrapCache[i + 1] } }
   var computed = this.computeWrapping(target);
   this.wrapCache.push(target, computed);
   return computed
@@ -42667,16 +42995,16 @@ ContentMatch.prototype.computeWrapping = function computeWrapping (target) {
 // :: number
 // The number of outgoing edges this node has in the finite
 // automaton that describes the content expression.
-prototypeAccessors$5.edgeCount.get = function () {
+prototypeAccessors$4.edgeCount.get = function () {
   return this.next.length >> 1
 };
 
 // :: (number) → {type: NodeType, next: ContentMatch}
-// Get the _n_th outgoing edge from this node in the finite
+// Get the _n_​th outgoing edge from this node in the finite
 // automaton that describes the content expression.
 ContentMatch.prototype.edge = function edge (n) {
   var i = n << 1;
-  if (i > this.next.length) { throw new RangeError(("There's no " + n + "th edge in this content match")) }
+  if (i >= this.next.length) { throw new RangeError(("There's no " + n + "th edge in this content match")) }
   return {type: this.next[i], next: this.next[i + 1]}
 };
 
@@ -42696,7 +43024,7 @@ ContentMatch.prototype.toString = function toString () {
   }).join("\n")
 };
 
-Object.defineProperties( ContentMatch.prototype, prototypeAccessors$5 );
+Object.defineProperties( ContentMatch.prototype, prototypeAccessors$4 );
 
 ContentMatch.empty = new ContentMatch(true);
 
@@ -42710,15 +43038,15 @@ var TokenStream = function TokenStream(string, nodeTypes) {
   if (this.tokens[0] == "") { this.tokens.unshift(); }
 };
 
-var prototypeAccessors$1$3 = { next: {} };
+var prototypeAccessors$1$2 = { next: { configurable: true } };
 
-prototypeAccessors$1$3.next.get = function () { return this.tokens[this.pos] };
+prototypeAccessors$1$2.next.get = function () { return this.tokens[this.pos] };
 
 TokenStream.prototype.eat = function eat (tok) { return this.next == tok && (this.pos++ || true) };
 
 TokenStream.prototype.err = function err (str) { throw new SyntaxError(str + " (in content expression '" + this.string + "')") };
 
-Object.defineProperties( TokenStream.prototype, prototypeAccessors$1$3 );
+Object.defineProperties( TokenStream.prototype, prototypeAccessors$1$2 );
 
 function parseExpr(stream) {
   var exprs = [];
@@ -43014,31 +43342,29 @@ var NodeType = function NodeType(name, schema, spec) {
   this.isText = name == "text";
 };
 
-var prototypeAccessors$4 = { isInline: {},isTextblock: {},isLeaf: {},isAtom: {} };
+var prototypeAccessors$5 = { isInline: { configurable: true },isTextblock: { configurable: true },isLeaf: { configurable: true },isAtom: { configurable: true } };
 
 // :: bool
 // True if this is an inline type.
-prototypeAccessors$4.isInline.get = function () { return !this.isBlock };
+prototypeAccessors$5.isInline.get = function () { return !this.isBlock };
 
 // :: bool
 // True if this is a textblock type, a block that contains inline
 // content.
-prototypeAccessors$4.isTextblock.get = function () { return this.isBlock && this.inlineContent };
+prototypeAccessors$5.isTextblock.get = function () { return this.isBlock && this.inlineContent };
 
 // :: bool
 // True for node types that allow no content.
-prototypeAccessors$4.isLeaf.get = function () { return this.contentMatch == ContentMatch.empty };
+prototypeAccessors$5.isLeaf.get = function () { return this.contentMatch == ContentMatch.empty };
 
 // :: bool
 // True when this node is an atom, i.e. when it does not have
 // directly editable content.
-prototypeAccessors$4.isAtom.get = function () { return this.isLeaf || this.spec.atom };
+prototypeAccessors$5.isAtom.get = function () { return this.isLeaf || this.spec.atom };
 
 NodeType.prototype.hasRequiredAttrs = function hasRequiredAttrs (ignore) {
-    var this$1 = this;
-
-  for (var n in this$1.attrs)
-    { if (this$1.attrs[n].isRequired && (!ignore || !(n in ignore))) { return true } }
+  for (var n in this.attrs)
+    { if (this.attrs[n].isRequired && (!ignore || !(n in ignore))) { return true } }
   return false
 };
 
@@ -43098,12 +43424,10 @@ NodeType.prototype.createAndFill = function createAndFill (attrs, content, marks
 // Returns true if the given fragment is valid content for this node
 // type with the given attributes.
 NodeType.prototype.validContent = function validContent (content) {
-    var this$1 = this;
-
   var result = this.contentMatch.matchFragment(content);
   if (!result || !result.validEnd) { return false }
   for (var i = 0; i < content.childCount; i++)
-    { if (!this$1.allowsMarks(content.child(i).marks)) { return false } }
+    { if (!this.allowsMarks(content.child(i).marks)) { return false } }
   return true
 };
 
@@ -43116,22 +43440,18 @@ NodeType.prototype.allowsMarkType = function allowsMarkType (markType) {
 // :: ([Mark]) → bool
 // Test whether the given set of marks are allowed in this node.
 NodeType.prototype.allowsMarks = function allowsMarks (marks) {
-    var this$1 = this;
-
   if (this.markSet == null) { return true }
-  for (var i = 0; i < marks.length; i++) { if (!this$1.allowsMarkType(marks[i].type)) { return false } }
+  for (var i = 0; i < marks.length; i++) { if (!this.allowsMarkType(marks[i].type)) { return false } }
   return true
 };
 
 // :: ([Mark]) → [Mark]
 // Removes the marks that are not allowed in this node from the given set.
 NodeType.prototype.allowedMarks = function allowedMarks (marks) {
-    var this$1 = this;
-
   if (this.markSet == null) { return marks }
   var copy;
   for (var i = 0; i < marks.length; i++) {
-    if (!this$1.allowsMarkType(marks[i].type)) {
+    if (!this.allowsMarkType(marks[i].type)) {
       if (!copy) { copy = marks.slice(0, i); }
     } else if (copy) {
       copy.push(marks[i]);
@@ -43152,7 +43472,7 @@ NodeType.compile = function compile (nodes, schema) {
   return result
 };
 
-Object.defineProperties( NodeType.prototype, prototypeAccessors$4 );
+Object.defineProperties( NodeType.prototype, prototypeAccessors$5 );
 
 // Attribute descriptors
 
@@ -43161,13 +43481,13 @@ var Attribute = function Attribute(options) {
   this.default = options.default;
 };
 
-var prototypeAccessors$1$2 = { isRequired: {} };
+var prototypeAccessors$1$3 = { isRequired: { configurable: true } };
 
-prototypeAccessors$1$2.isRequired.get = function () {
+prototypeAccessors$1$3.isRequired.get = function () {
   return !this.hasDefault
 };
 
-Object.defineProperties( Attribute.prototype, prototypeAccessors$1$2 );
+Object.defineProperties( Attribute.prototype, prototypeAccessors$1$3 );
 
 // Marks
 
@@ -43215,10 +43535,8 @@ MarkType.compile = function compile (marks, schema) {
 // When there is a mark of this type in the given set, a new set
 // without it is returned. Otherwise, the input set is returned.
 MarkType.prototype.removeFromSet = function removeFromSet (set) {
-    var this$1 = this;
-
   for (var i = 0; i < set.length; i++)
-    { if (set[i].type == this$1)
+    { if (set[i].type == this)
       { return set.slice(0, i).concat(set.slice(i + 1)) } }
   return set
 };
@@ -43226,10 +43544,8 @@ MarkType.prototype.removeFromSet = function removeFromSet (set) {
 // :: ([Mark]) → ?Mark
 // Tests whether there is a mark of this type in the given set.
 MarkType.prototype.isInSet = function isInSet (set) {
-    var this$1 = this;
-
   for (var i = 0; i < set.length; i++)
-    { if (set[i].type == this$1) { return set[i] } }
+    { if (set[i].type == this) { return set[i] } }
 };
 
 // :: (MarkType) → bool
@@ -43405,8 +43721,6 @@ MarkType.prototype.excludes = function excludes (other) {
 // occur in conforming documents, and provides functionality for
 // creating and deserializing such documents.
 var Schema = function Schema(spec) {
-  var this$1 = this;
-
   // :: SchemaSpec
   // The [spec](#model.SchemaSpec) on which the schema is based,
   // with the added guarantee that its `nodes` and `marks`
@@ -43414,9 +43728,9 @@ var Schema = function Schema(spec) {
   // [`OrderedMap`](https://github.com/marijnh/orderedmap) instances
   // (not raw objects).
   this.spec = {};
-  for (var prop in spec) { this$1.spec[prop] = spec[prop]; }
-  this.spec.nodes = OrderedMap.from(spec.nodes);
-  this.spec.marks = OrderedMap.from(spec.marks);
+  for (var prop in spec) { this.spec[prop] = spec[prop]; }
+  this.spec.nodes = orderedmap__WEBPACK_IMPORTED_MODULE_0__["default"].from(spec.nodes);
+  this.spec.marks = orderedmap__WEBPACK_IMPORTED_MODULE_0__["default"].from(spec.marks);
 
   // :: Object<NodeType>
   // An object mapping the schema's node names to node type objects.
@@ -43427,20 +43741,20 @@ var Schema = function Schema(spec) {
   this.marks = MarkType.compile(this.spec.marks, this);
 
   var contentExprCache = Object.create(null);
-  for (var prop$1 in this$1.nodes) {
-    if (prop$1 in this$1.marks)
+  for (var prop$1 in this.nodes) {
+    if (prop$1 in this.marks)
       { throw new RangeError(prop$1 + " can not be both a node and a mark") }
-    var type = this$1.nodes[prop$1], contentExpr = type.spec.content || "", markExpr = type.spec.marks;
+    var type = this.nodes[prop$1], contentExpr = type.spec.content || "", markExpr = type.spec.marks;
     type.contentMatch = contentExprCache[contentExpr] ||
-      (contentExprCache[contentExpr] = ContentMatch.parse(contentExpr, this$1.nodes));
+      (contentExprCache[contentExpr] = ContentMatch.parse(contentExpr, this.nodes));
     type.inlineContent = type.contentMatch.inlineContent;
     type.markSet = markExpr == "_" ? null :
-      markExpr ? gatherMarks(this$1, markExpr.split(" ")) :
+      markExpr ? gatherMarks(this, markExpr.split(" ")) :
       markExpr == "" || !type.inlineContent ? [] : null;
   }
-  for (var prop$2 in this$1.marks) {
-    var type$1 = this$1.marks[prop$2], excl = type$1.spec.excludes;
-    type$1.excluded = excl == null ? [type$1] : excl == "" ? [] : gatherMarks(this$1, excl.split(" "));
+  for (var prop$2 in this.marks) {
+    var type$1 = this.marks[prop$2], excl = type$1.spec.excludes;
+    type$1.excluded = excl == null ? [type$1] : excl == "" ? [] : gatherMarks(this, excl.split(" "));
   }
 
   this.nodeFromJSON = this.nodeFromJSON.bind(this);
@@ -43707,10 +44021,8 @@ DOMParser.prototype.parseSlice = function parseSlice (dom, options) {
 };
 
 DOMParser.prototype.matchTag = function matchTag (dom, context) {
-    var this$1 = this;
-
   for (var i = 0; i < this.tags.length; i++) {
-    var rule = this$1.tags[i];
+    var rule = this.tags[i];
     if (matches(dom, rule.tag) &&
         (rule.namespace === undefined || dom.namespaceURI == rule.namespace) &&
         (!rule.context || context.matchesContext(rule.context))) {
@@ -43725,10 +44037,8 @@ DOMParser.prototype.matchTag = function matchTag (dom, context) {
 };
 
 DOMParser.prototype.matchStyle = function matchStyle (prop, value, context) {
-    var this$1 = this;
-
   for (var i = 0; i < this.styles.length; i++) {
-    var rule = this$1.styles[i];
+    var rule = this.styles[i];
     if (rule.style.indexOf(prop) != 0 ||
         rule.context && !context.matchesContext(rule.context) ||
         // Test that the style string either precisely matches the prop,
@@ -43775,7 +44085,7 @@ DOMParser.schemaRules = function schemaRules (schema) {
     }); }
   };
 
-    for (var name$1 in schema.nodes) loop$1( name );
+    for (var name$1 in schema.nodes) loop$1();
   return result
 };
 
@@ -43806,9 +44116,7 @@ var ignoreTags = {
 var listTags = {ol: true, ul: true};
 
 // Using a bitfield for node context options
-var OPT_PRESERVE_WS = 1;
-var OPT_PRESERVE_WS_FULL = 2;
-var OPT_OPEN_LEFT = 4;
+var OPT_PRESERVE_WS = 1, OPT_PRESERVE_WS_FULL = 2, OPT_OPEN_LEFT = 4;
 
 function wsOptionsFor(preserveWhitespace) {
   return (preserveWhitespace ? OPT_PRESERVE_WS : 0) | (preserveWhitespace === "full" ? OPT_PRESERVE_WS_FULL : 0)
@@ -43881,7 +44189,7 @@ var ParseContext = function ParseContext(parser, options, open) {
   this.needsBlock = false;
 };
 
-var prototypeAccessors$6 = { top: {},currentPos: {} };
+var prototypeAccessors$6 = { top: { configurable: true },currentPos: { configurable: true } };
 
 prototypeAccessors$6.top.get = function () {
   return this.nodes[this.open]
@@ -43892,16 +44200,14 @@ prototypeAccessors$6.top.get = function () {
 // otherwise, the node is passed to `addElement` or, if it has a
 // `style` attribute, `addElementWithStyles`.
 ParseContext.prototype.addDOM = function addDOM (dom) {
-    var this$1 = this;
-
   if (dom.nodeType == 3) {
     this.addTextNode(dom);
   } else if (dom.nodeType == 1) {
     var style = dom.getAttribute("style");
     var marks = style ? this.readStyles(parseStyles(style)) : null;
-    if (marks != null) { for (var i = 0; i < marks.length; i++) { this$1.addPendingMark(marks[i]); } }
+    if (marks != null) { for (var i = 0; i < marks.length; i++) { this.addPendingMark(marks[i]); } }
     this.addElement(dom);
-    if (marks != null) { for (var i$1 = 0; i$1 < marks.length; i$1++) { this$1.removePendingMark(marks[i$1]); } }
+    if (marks != null) { for (var i$1 = 0; i$1 < marks.length; i$1++) { this.removePendingMark(marks[i$1]); } }
   }
 };
 
@@ -43969,14 +44275,12 @@ ParseContext.prototype.leafFallback = function leafFallback (dom) {
 // return an array of marks, or null to indicate some of the styles
 // had a rule with `ignore` set.
 ParseContext.prototype.readStyles = function readStyles (styles) {
-    var this$1 = this;
-
   var marks = Mark.none;
   for (var i = 0; i < styles.length; i += 2) {
-    var rule = this$1.parser.matchStyle(styles[i], styles[i + 1], this$1);
+    var rule = this.parser.matchStyle(styles[i], styles[i + 1], this);
     if (!rule) { continue }
     if (rule.ignore) { return null }
-    marks = this$1.parser.schema.marks[rule.mark].create(rule.attrs).addToSet(marks);
+    marks = this.parser.schema.marks[rule.mark].create(rule.attrs).addToSet(marks);
   }
   return marks
 };
@@ -44025,16 +44329,14 @@ ParseContext.prototype.addElementByRule = function addElementByRule (dom, rule) 
 // whole node, if not given). If `sync` is passed, use it to
 // synchronize after every block element.
 ParseContext.prototype.addAll = function addAll (parent, sync, startIndex, endIndex) {
-    var this$1 = this;
-
   var index = startIndex || 0;
   for (var dom = startIndex ? parent.childNodes[startIndex] : parent.firstChild,
            end = endIndex == null ? null : parent.childNodes[endIndex];
        dom != end; dom = dom.nextSibling, ++index) {
-    this$1.findAtPoint(parent, index);
-    this$1.addDOM(dom);
+    this.findAtPoint(parent, index);
+    this.addDOM(dom);
     if (sync && blockTags.hasOwnProperty(dom.nodeName.toLowerCase()))
-      { this$1.sync(sync); }
+      { this.sync(sync); }
   }
   this.findAtPoint(parent, index);
 };
@@ -44043,11 +44345,9 @@ ParseContext.prototype.addAll = function addAll (parent, sync, startIndex, endIn
 // context. May add intermediate wrappers and/or leave non-solid
 // nodes that we're in.
 ParseContext.prototype.findPlace = function findPlace (node) {
-    var this$1 = this;
-
   var route, sync;
   for (var depth = this.open; depth >= 0; depth--) {
-    var cx = this$1.nodes[depth];
+    var cx = this.nodes[depth];
     var found = cx.findWrapping(node);
     if (found && (!route || route.length > found.length)) {
       route = found;
@@ -44059,7 +44359,7 @@ ParseContext.prototype.findPlace = function findPlace (node) {
   if (!route) { return false }
   this.sync(sync);
   for (var i = 0; i < route.length; i++)
-    { this$1.enterInner(route[i], null, false); }
+    { this.enterInner(route[i], null, false); }
   return true
 };
 
@@ -44086,13 +44386,11 @@ ParseContext.prototype.insertNode = function insertNode (node) {
 };
 
 ParseContext.prototype.applyPendingMarks = function applyPendingMarks (top) {
-    var this$1 = this;
-
   for (var i = 0; i < this.pendingMarks.length; i++) {
-    var mark = this$1.pendingMarks[i];
+    var mark = this.pendingMarks[i];
     if ((!top.type || top.type.allowsMarkType(mark.type)) && !mark.isInSet(top.activeMarks)) {
       top.activeMarks = mark.addToSet(top.activeMarks);
-      this$1.pendingMarks.splice(i--, 1);
+      this.pendingMarks.splice(i--, 1);
     }
   }
 };
@@ -44123,11 +44421,9 @@ ParseContext.prototype.enterInner = function enterInner (type, attrs, solid, pre
 // Make sure all nodes above this.open are finished and added to
 // their parents
 ParseContext.prototype.closeExtra = function closeExtra (openEnd) {
-    var this$1 = this;
-
   var i = this.nodes.length - 1;
   if (i > this.open) {
-    for (; i > this.open; i--) { this$1.nodes[i - 1].content.push(this$1.nodes[i].finish(openEnd)); }
+    for (; i > this.open; i--) { this.nodes[i - 1].content.push(this.nodes[i].finish(openEnd)); }
     this.nodes.length = this.open + 1;
   }
 };
@@ -44139,10 +44435,8 @@ ParseContext.prototype.finish = function finish () {
 };
 
 ParseContext.prototype.sync = function sync (to) {
-    var this$1 = this;
-
-  for (var i = this.open; i >= 0; i--) { if (this$1.nodes[i] == to) {
-    this$1.open = i;
+  for (var i = this.open; i >= 0; i--) { if (this.nodes[i] == to) {
+    this.open = i;
     return
   } }
 };
@@ -44162,12 +44456,10 @@ ParseContext.prototype.removePendingMark = function removePendingMark (mark) {
 };
 
 prototypeAccessors$6.currentPos.get = function () {
-    var this$1 = this;
-
   this.closeExtra();
   var pos = 0;
   for (var i = this.open; i >= 0; i--) {
-    var content = this$1.nodes[i].content;
+    var content = this.nodes[i].content;
     for (var j = content.length - 1; j >= 0; j--)
       { pos += content[j].nodeSize; }
     if (i) { pos++; }
@@ -44176,41 +44468,33 @@ prototypeAccessors$6.currentPos.get = function () {
 };
 
 ParseContext.prototype.findAtPoint = function findAtPoint (parent, offset) {
-    var this$1 = this;
-
   if (this.find) { for (var i = 0; i < this.find.length; i++) {
-    if (this$1.find[i].node == parent && this$1.find[i].offset == offset)
-      { this$1.find[i].pos = this$1.currentPos; }
+    if (this.find[i].node == parent && this.find[i].offset == offset)
+      { this.find[i].pos = this.currentPos; }
   } }
 };
 
 ParseContext.prototype.findInside = function findInside (parent) {
-    var this$1 = this;
-
   if (this.find) { for (var i = 0; i < this.find.length; i++) {
-    if (this$1.find[i].pos == null && parent.nodeType == 1 && parent.contains(this$1.find[i].node))
-      { this$1.find[i].pos = this$1.currentPos; }
+    if (this.find[i].pos == null && parent.nodeType == 1 && parent.contains(this.find[i].node))
+      { this.find[i].pos = this.currentPos; }
   } }
 };
 
 ParseContext.prototype.findAround = function findAround (parent, content, before) {
-    var this$1 = this;
-
   if (parent != content && this.find) { for (var i = 0; i < this.find.length; i++) {
-    if (this$1.find[i].pos == null && parent.nodeType == 1 && parent.contains(this$1.find[i].node)) {
-      var pos = content.compareDocumentPosition(this$1.find[i].node);
+    if (this.find[i].pos == null && parent.nodeType == 1 && parent.contains(this.find[i].node)) {
+      var pos = content.compareDocumentPosition(this.find[i].node);
       if (pos & (before ? 2 : 4))
-        { this$1.find[i].pos = this$1.currentPos; }
+        { this.find[i].pos = this.currentPos; }
     }
   } }
 };
 
 ParseContext.prototype.findInText = function findInText (textNode) {
-    var this$1 = this;
-
   if (this.find) { for (var i = 0; i < this.find.length; i++) {
-    if (this$1.find[i].node == textNode)
-      { this$1.find[i].pos = this$1.currentPos - (textNode.nodeValue.length - this$1.find[i].offset); }
+    if (this.find[i].node == textNode)
+      { this.find[i].pos = this.currentPos - (textNode.nodeValue.length - this.find[i].offset); }
   } }
 };
 
@@ -44250,15 +44534,13 @@ ParseContext.prototype.matchesContext = function matchesContext (context) {
 };
 
 ParseContext.prototype.textblockFromContext = function textblockFromContext () {
-    var this$1 = this;
-
   var $context = this.options.context;
   if ($context) { for (var d = $context.depth; d >= 0; d--) {
     var deflt = $context.node(d).contentMatchAt($context.indexAfter(d)).defaultType;
     if (deflt && deflt.isTextblock && deflt.defaultAttrs) { return deflt }
   } }
-  for (var name in this$1.parser.schema.nodes) {
-    var type = this$1.parser.schema.nodes[name];
+  for (var name in this.parser.schema.nodes) {
+    var type = this.parser.schema.nodes[name];
     if (type.isTextblock && type.defaultAttrs) { return type }
   }
 };
@@ -44397,14 +44679,13 @@ DOMSerializer.prototype.serializeNode = function serializeNode (node, options) {
 };
 
 DOMSerializer.prototype.serializeNodeAndMarks = function serializeNodeAndMarks (node, options) {
-    var this$1 = this;
     if ( options === void 0 ) options = {};
 
   var dom = this.serializeNode(node, options);
   for (var i = node.marks.length - 1; i >= 0; i--) {
-    var wrap = this$1.serializeMark(node.marks[i], node.isInline, options);
+    var wrap = this.serializeMark(node.marks[i], node.isInline, options);
     if (wrap) {
-      (wrap.contentDOM || wrap.dom).appendChild(dom);
+(wrap.contentDOM || wrap.dom).appendChild(dom);
       dom = wrap.dom;
     }
   }
@@ -44492,42 +44773,35 @@ function doc(options) {
   return options.document || window.document
 }
 
-exports.Node = Node;
-exports.ResolvedPos = ResolvedPos;
-exports.NodeRange = NodeRange;
-exports.Fragment = Fragment;
-exports.Slice = Slice;
-exports.ReplaceError = ReplaceError;
-exports.Mark = Mark;
-exports.Schema = Schema;
-exports.NodeType = NodeType;
-exports.MarkType = MarkType;
-exports.ContentMatch = ContentMatch;
-exports.DOMParser = DOMParser;
-exports.DOMSerializer = DOMSerializer;
-//# sourceMappingURL=index.js.map
+
+//# sourceMappingURL=index.es.js.map
 
 
 /***/ }),
 
-/***/ "./node_modules/prosemirror-schema-list/dist/schema-list.js":
-/*!******************************************************************!*\
-  !*** ./node_modules/prosemirror-schema-list/dist/schema-list.js ***!
-  \******************************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
+/***/ "./node_modules/prosemirror-schema-list/dist/index.es.js":
+/*!***************************************************************!*\
+  !*** ./node_modules/prosemirror-schema-list/dist/index.es.js ***!
+  \***************************************************************/
+/*! exports provided: addListNodes, bulletList, liftListItem, listItem, orderedList, sinkListItem, splitListItem, wrapInList */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "addListNodes", function() { return addListNodes; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "bulletList", function() { return bulletList; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "liftListItem", function() { return liftListItem; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "listItem", function() { return listItem; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "orderedList", function() { return orderedList; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "sinkListItem", function() { return sinkListItem; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "splitListItem", function() { return splitListItem; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "wrapInList", function() { return wrapInList; });
+/* harmony import */ var prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! prosemirror-transform */ "./node_modules/prosemirror-transform/dist/index.es.js");
+/* harmony import */ var prosemirror_model__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.es.js");
 
 
-Object.defineProperty(exports, '__esModule', { value: true });
 
-var prosemirrorTransform = __webpack_require__(/*! prosemirror-transform */ "./node_modules/prosemirror-transform/dist/index.js");
-var prosemirrorModel = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.js");
-
-var olDOM = ["ol", 0];
-var ulDOM = ["ul", 0];
-var liDOM = ["li", 0];
+var olDOM = ["ol", 0], ulDOM = ["ul", 0], liDOM = ["li", 0];
 
 // :: NodeSpec
 // An ordered list [node spec](#model.NodeSpec). Has a single
@@ -44604,12 +44878,12 @@ function wrapInList(listType, attrs) {
       // Don't do anything if this is the top of the list
       if ($from.index(range.depth - 1) == 0) { return false }
       var $insert = state.doc.resolve(range.start - 2);
-      outerRange = new prosemirrorModel.NodeRange($insert, $insert, range.depth);
+      outerRange = new prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["NodeRange"]($insert, $insert, range.depth);
       if (range.endIndex < range.parent.childCount)
-        { range = new prosemirrorModel.NodeRange($from, state.doc.resolve($to.end(range.depth)), range.depth); }
+        { range = new prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["NodeRange"]($from, state.doc.resolve($to.end(range.depth)), range.depth); }
       doJoin = true;
     }
-    var wrap = prosemirrorTransform.findWrapping(outerRange, listType, attrs, range);
+    var wrap = Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["findWrapping"])(outerRange, listType, attrs, range);
     if (!wrap) { return false }
     if (dispatch) { dispatch(doWrapInList(state.tr, range, wrap, doJoin, listType).scrollIntoView()); }
     return true
@@ -44617,12 +44891,12 @@ function wrapInList(listType, attrs) {
 }
 
 function doWrapInList(tr, range, wrappers, joinBefore, listType) {
-  var content = prosemirrorModel.Fragment.empty;
+  var content = prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].empty;
   for (var i = wrappers.length - 1; i >= 0; i--)
-    { content = prosemirrorModel.Fragment.from(wrappers[i].type.create(wrappers[i].attrs, content)); }
+    { content = prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(wrappers[i].type.create(wrappers[i].attrs, content)); }
 
-  tr.step(new prosemirrorTransform.ReplaceAroundStep(range.start - (joinBefore ? 2 : 0), range.end, range.start, range.end,
-                                new prosemirrorModel.Slice(content, 0, 0), wrappers.length, true));
+  tr.step(new prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["ReplaceAroundStep"](range.start - (joinBefore ? 2 : 0), range.end, range.start, range.end,
+                                new prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"](content, 0, 0), wrappers.length, true));
 
   var found = 0;
   for (var i$1 = 0; i$1 < wrappers.length; i$1++) { if (wrappers[i$1].type == listType) { found = i$1 + 1; } }
@@ -44630,7 +44904,7 @@ function doWrapInList(tr, range, wrappers, joinBefore, listType) {
 
   var splitPos = range.start + wrappers.length - (joinBefore ? 2 : 0), parent = range.parent;
   for (var i$2 = range.startIndex, e = range.endIndex, first = true; i$2 < e; i$2++, first = false) {
-    if (!first && prosemirrorTransform.canSplit(tr.doc, splitPos, splitDepth)) {
+    if (!first && Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["canSplit"])(tr.doc, splitPos, splitDepth)) {
       tr.split(splitPos, splitDepth);
       splitPos += 2 * splitDepth;
     }
@@ -44658,14 +44932,14 @@ function splitListItem(itemType) {
       if ($from.depth == 2 || $from.node(-3).type != itemType ||
           $from.index(-2) != $from.node(-2).childCount - 1) { return false }
       if (dispatch) {
-        var wrap = prosemirrorModel.Fragment.empty, keepItem = $from.index(-1) > 0;
+        var wrap = prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].empty, keepItem = $from.index(-1) > 0;
         // Build a fragment containing empty versions of the structure
         // from the outer list item to the parent node of the cursor
         for (var d = $from.depth - (keepItem ? 1 : 2); d >= $from.depth - 3; d--)
-          { wrap = prosemirrorModel.Fragment.from($from.node(d).copy(wrap)); }
+          { wrap = prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from($from.node(d).copy(wrap)); }
         // Add a second list item with an empty default start node
-        wrap = wrap.append(prosemirrorModel.Fragment.from(itemType.createAndFill()));
-        var tr$1 = state.tr.replace($from.before(keepItem ? null : -1), $from.after(-3), new prosemirrorModel.Slice(wrap, keepItem ? 3 : 2, 2));
+        wrap = wrap.append(prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(itemType.createAndFill()));
+        var tr$1 = state.tr.replace($from.before(keepItem ? null : -1), $from.after(-3), new prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"](wrap, keepItem ? 3 : 2, 2));
         tr$1.setSelection(state.selection.constructor.near(tr$1.doc.resolve($from.pos + (keepItem ? 3 : 2))));
         dispatch(tr$1.scrollIntoView());
       }
@@ -44674,7 +44948,7 @@ function splitListItem(itemType) {
     var nextType = $to.pos == $from.end() ? grandParent.contentMatchAt(0).defaultType : null;
     var tr = state.tr.delete($from.pos, $to.pos);
     var types = nextType && [null, {type: nextType}];
-    if (!prosemirrorTransform.canSplit(tr.doc, $from.pos, 2, types)) { return false }
+    if (!Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["canSplit"])(tr.doc, $from.pos, 2, types)) { return false }
     if (dispatch) { dispatch(tr.split($from.pos, 2, types).scrollIntoView()); }
     return true
   }
@@ -44703,11 +44977,11 @@ function liftToOuterList(state, dispatch, itemType, range) {
   if (end < endOfList) {
     // There are siblings after the lifted items, which must become
     // children of the last item
-    tr.step(new prosemirrorTransform.ReplaceAroundStep(end - 1, endOfList, end, endOfList,
-                                  new prosemirrorModel.Slice(prosemirrorModel.Fragment.from(itemType.create(null, range.parent.copy())), 1, 0), 1, true));
-    range = new prosemirrorModel.NodeRange(tr.doc.resolve(range.$from.pos), tr.doc.resolve(endOfList), range.depth);
+    tr.step(new prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["ReplaceAroundStep"](end - 1, endOfList, end, endOfList,
+                                  new prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"](prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(itemType.create(null, range.parent.copy())), 1, 0), 1, true));
+    range = new prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["NodeRange"](tr.doc.resolve(range.$from.pos), tr.doc.resolve(endOfList), range.depth);
   }
-  dispatch(tr.lift(range, prosemirrorTransform.liftTarget(range)).scrollIntoView());
+  dispatch(tr.lift(range, Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["liftTarget"])(range)).scrollIntoView());
   return true
 }
 
@@ -44722,15 +44996,15 @@ function liftOutOfList(state, dispatch, range) {
   var atStart = range.startIndex == 0, atEnd = range.endIndex == list.childCount;
   var parent = $start.node(-1), indexBefore = $start.index(-1);
   if (!parent.canReplace(indexBefore + (atStart ? 0 : 1), indexBefore + 1,
-                         item.content.append(atEnd ? prosemirrorModel.Fragment.empty : prosemirrorModel.Fragment.from(list))))
+                         item.content.append(atEnd ? prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].empty : prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(list))))
     { return false }
   var start = $start.pos, end = start + item.nodeSize;
   // Strip off the surrounding list. At the sides where we're not at
   // the end of the list, the existing list is closed. At sides where
   // this is the end, it is overwritten to its end.
-  tr.step(new prosemirrorTransform.ReplaceAroundStep(start - (atStart ? 1 : 0), end + (atEnd ? 1 : 0), start + 1, end - 1,
-                                new prosemirrorModel.Slice((atStart ? prosemirrorModel.Fragment.empty : prosemirrorModel.Fragment.from(list.copy(prosemirrorModel.Fragment.empty)))
-                                          .append(atEnd ? prosemirrorModel.Fragment.empty : prosemirrorModel.Fragment.from(list.copy(prosemirrorModel.Fragment.empty))),
+  tr.step(new prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["ReplaceAroundStep"](start - (atStart ? 1 : 0), end + (atEnd ? 1 : 0), start + 1, end - 1,
+                                new prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"]((atStart ? prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].empty : prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(list.copy(prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].empty)))
+                                          .append(atEnd ? prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].empty : prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(list.copy(prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].empty))),
                                           atStart ? 0 : 1, atEnd ? 0 : 1), atStart ? 0 : 1));
   dispatch(tr.scrollIntoView());
   return true
@@ -44753,11 +45027,11 @@ function sinkListItem(itemType) {
 
     if (dispatch) {
       var nestedBefore = nodeBefore.lastChild && nodeBefore.lastChild.type == parent.type;
-      var inner = prosemirrorModel.Fragment.from(nestedBefore ? itemType.create() : null);
-      var slice = new prosemirrorModel.Slice(prosemirrorModel.Fragment.from(itemType.create(null, prosemirrorModel.Fragment.from(parent.type.create(null, inner)))),
+      var inner = prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(nestedBefore ? itemType.create() : null);
+      var slice = new prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"](prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(itemType.create(null, prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(parent.type.create(null, inner)))),
                             nestedBefore ? 3 : 1, 0);
       var before = range.start, after = range.end;
-      dispatch(state.tr.step(new prosemirrorTransform.ReplaceAroundStep(before - (nestedBefore ? 3 : 1), after,
+      dispatch(state.tr.step(new prosemirror_transform__WEBPACK_IMPORTED_MODULE_0__["ReplaceAroundStep"](before - (nestedBefore ? 3 : 1), after,
                                                    before, after, slice, 1, true))
                .scrollIntoView());
     }
@@ -44765,33 +45039,34 @@ function sinkListItem(itemType) {
   }
 }
 
-exports.orderedList = orderedList;
-exports.bulletList = bulletList;
-exports.listItem = listItem;
-exports.addListNodes = addListNodes;
-exports.wrapInList = wrapInList;
-exports.splitListItem = splitListItem;
-exports.liftListItem = liftListItem;
-exports.sinkListItem = sinkListItem;
-//# sourceMappingURL=schema-list.js.map
+
+//# sourceMappingURL=index.es.js.map
 
 
 /***/ }),
 
-/***/ "./node_modules/prosemirror-state/dist/index.js":
-/*!******************************************************!*\
-  !*** ./node_modules/prosemirror-state/dist/index.js ***!
-  \******************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
+/***/ "./node_modules/prosemirror-state/dist/index.es.js":
+/*!*********************************************************!*\
+  !*** ./node_modules/prosemirror-state/dist/index.es.js ***!
+  \*********************************************************/
+/*! exports provided: AllSelection, EditorState, NodeSelection, Plugin, PluginKey, Selection, SelectionRange, TextSelection, Transaction */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "AllSelection", function() { return AllSelection; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "EditorState", function() { return EditorState; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "NodeSelection", function() { return NodeSelection; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Plugin", function() { return Plugin; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "PluginKey", function() { return PluginKey; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Selection", function() { return Selection; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "SelectionRange", function() { return SelectionRange; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "TextSelection", function() { return TextSelection; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Transaction", function() { return Transaction; });
+/* harmony import */ var prosemirror_model__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.es.js");
+/* harmony import */ var prosemirror_transform__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! prosemirror-transform */ "./node_modules/prosemirror-transform/dist/index.es.js");
 
 
-Object.defineProperty(exports, '__esModule', { value: true });
-
-var prosemirrorModel = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.js");
-var prosemirrorTransform = __webpack_require__(/*! prosemirror-transform */ "./node_modules/prosemirror-transform/dist/index.js");
 
 var classesById = Object.create(null);
 
@@ -44811,7 +45086,7 @@ var Selection = function Selection($anchor, $head, ranges) {
   this.$head = $head;
 };
 
-var prototypeAccessors = { anchor: {},head: {},from: {},to: {},$from: {},$to: {},empty: {} };
+var prototypeAccessors = { anchor: { configurable: true },head: { configurable: true },from: { configurable: true },to: { configurable: true },$from: { configurable: true },$to: { configurable: true },empty: { configurable: true } };
 
 // :: number
 // The selection's anchor, as an unresolved position.
@@ -44867,7 +45142,7 @@ Selection.prototype.content = function content () {
 // Replace the selection with a slice or, if no slice is given,
 // delete the selection. Will append to the given transaction.
 Selection.prototype.replace = function replace (tr, content) {
-    if ( content === void 0 ) content = prosemirrorModel.Slice.empty;
+    if ( content === void 0 ) content = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].empty;
 
   // Put the new selection at the position after the inserted
   // content. When that ended in an inline node, search backwards,
@@ -44884,7 +45159,7 @@ Selection.prototype.replace = function replace (tr, content) {
       var $from = ref.$from;
       var $to = ref.$to;
       var mapping = tr.mapping.slice(mapFrom);
-    tr.replaceRange(mapping.map($from.pos), mapping.map($to.pos), i$1 ? prosemirrorModel.Slice.empty : content);
+    tr.replaceRange(mapping.map($from.pos), mapping.map($to.pos), i$1 ? prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].empty : content);
     if (i$1 == 0)
       { selectionToInsertionEnd(tr, mapFrom, (lastNode ? lastNode.isInline : lastParent && lastParent.isTextblock) ? -1 : 1); }
   }
@@ -45031,7 +45306,7 @@ var SelectionRange = function SelectionRange($from, $to) {
 // a head (the moving side) and anchor (immobile side), both of which
 // point into textblock nodes. It can be empty (a regular cursor
 // position).
-var TextSelection = (function (Selection) {
+var TextSelection = /*@__PURE__*/(function (Selection) {
   function TextSelection($anchor, $head) {
     if ( $head === void 0 ) $head = $anchor;
 
@@ -45042,7 +45317,7 @@ var TextSelection = (function (Selection) {
   TextSelection.prototype = Object.create( Selection && Selection.prototype );
   TextSelection.prototype.constructor = TextSelection;
 
-  var prototypeAccessors$1 = { $cursor: {} };
+  var prototypeAccessors$1 = { $cursor: { configurable: true } };
 
   // :: ?ResolvedPos
   // Returns a resolved position if this is a cursor selection (an
@@ -45057,10 +45332,10 @@ var TextSelection = (function (Selection) {
   };
 
   TextSelection.prototype.replace = function replace (tr, content) {
-    if ( content === void 0 ) content = prosemirrorModel.Slice.empty;
+    if ( content === void 0 ) content = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].empty;
 
     Selection.prototype.replace.call(this, tr, content);
-    if (content == prosemirrorModel.Slice.empty) {
+    if (content == prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].empty) {
       var marks = this.$from.marksAcross(this.$to);
       if (marks) { tr.ensureMarks(marks); }
     }
@@ -45142,7 +45417,7 @@ TextBookmark.prototype.resolve = function resolve (doc) {
 // the target of a node selection. In such a selection, `from` and
 // `to` point directly before and after the selected node, `anchor`
 // equals `from`, and `head` equals `to`..
-var NodeSelection = (function (Selection) {
+var NodeSelection = /*@__PURE__*/(function (Selection) {
   function NodeSelection($pos) {
     var node = $pos.nodeAfter;
     var $end = $pos.node(0).resolve($pos.pos + node.nodeSize);
@@ -45165,7 +45440,7 @@ var NodeSelection = (function (Selection) {
   };
 
   NodeSelection.prototype.content = function content () {
-    return new prosemirrorModel.Slice(prosemirrorModel.Fragment.from(this.node), 0, 0)
+    return new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from(this.node), 0, 0)
   };
 
   NodeSelection.prototype.eq = function eq (other) {
@@ -45223,7 +45498,7 @@ NodeBookmark.prototype.resolve = function resolve (doc) {
 // (which can not necessarily be expressed with a text selection, when
 // there are for example leaf block nodes at the start or end of the
 // document).
-var AllSelection = (function (Selection) {
+var AllSelection = /*@__PURE__*/(function (Selection) {
   function AllSelection(doc) {
     Selection.call(this, doc.resolve(0), doc.resolve(doc.content.size));
   }
@@ -45275,15 +45550,13 @@ function selectionToInsertionEnd(tr, startLen, bias) {
   var last = tr.steps.length - 1;
   if (last < startLen) { return }
   var step = tr.steps[last];
-  if (!(step instanceof prosemirrorTransform.ReplaceStep || step instanceof prosemirrorTransform.ReplaceAroundStep)) { return }
+  if (!(step instanceof prosemirror_transform__WEBPACK_IMPORTED_MODULE_1__["ReplaceStep"] || step instanceof prosemirror_transform__WEBPACK_IMPORTED_MODULE_1__["ReplaceAroundStep"])) { return }
   var map = tr.mapping.maps[last], end;
   map.forEach(function (_from, _to, _newFrom, newTo) { if (end == null) { end = newTo; } });
   tr.setSelection(Selection.near(tr.doc.resolve(end), bias));
 }
 
-var UPDATED_SEL = 1;
-var UPDATED_MARKS = 2;
-var UPDATED_SCROLL = 4;
+var UPDATED_SEL = 1, UPDATED_MARKS = 2, UPDATED_SCROLL = 4;
 
 // ::- An editor state transaction, which can be applied to a state to
 // create an updated state. Use
@@ -45302,9 +45575,9 @@ var UPDATED_SCROLL = 4;
 // it will attach a property `"pointer"` with the value `true` to
 // selection transactions directly caused by mouse or touch input, and
 // a `"uiEvent"` property of that may be `"paste"`, `"cut"`, or `"drop"`.
-var Transaction = (function (Transform$$1) {
+var Transaction = /*@__PURE__*/(function (Transform) {
   function Transaction(state) {
-    Transform$$1.call(this, state.doc);
+    Transform.call(this, state.doc);
     // :: number
     // The timestamp associated with this transaction, in the same
     // format as `Date.now()`.
@@ -45322,11 +45595,11 @@ var Transaction = (function (Transform$$1) {
     this.meta = Object.create(null);
   }
 
-  if ( Transform$$1 ) Transaction.__proto__ = Transform$$1;
-  Transaction.prototype = Object.create( Transform$$1 && Transform$$1.prototype );
+  if ( Transform ) Transaction.__proto__ = Transform;
+  Transaction.prototype = Object.create( Transform && Transform.prototype );
   Transaction.prototype.constructor = Transaction;
 
-  var prototypeAccessors = { selection: {},selectionSet: {},storedMarksSet: {},isGeneric: {},scrolledIntoView: {} };
+  var prototypeAccessors = { selection: { configurable: true },selectionSet: { configurable: true },storedMarksSet: { configurable: true },isGeneric: { configurable: true },scrolledIntoView: { configurable: true } };
 
   // :: Selection
   // The transaction's current selection. This defaults to the editor
@@ -45373,7 +45646,7 @@ var Transaction = (function (Transform$$1) {
   // at the selection, match the given set of marks. Does nothing if
   // this is already the case.
   Transaction.prototype.ensureMarks = function ensureMarks (marks) {
-    if (!prosemirrorModel.Mark.sameSet(this.storedMarks || this.selection.$from.marks(), marks))
+    if (!prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Mark"].sameSet(this.storedMarks || this.selection.$from.marks(), marks))
       { this.setStoredMarks(marks); }
     return this
   };
@@ -45397,7 +45670,7 @@ var Transaction = (function (Transform$$1) {
   };
 
   Transaction.prototype.addStep = function addStep (step, doc) {
-    Transform$$1.prototype.addStep.call(this, step, doc);
+    Transform.prototype.addStep.call(this, step, doc);
     this.updated = this.updated & ~UPDATED_MARKS;
     this.storedMarks = null;
   };
@@ -45423,7 +45696,7 @@ var Transaction = (function (Transform$$1) {
   Transaction.prototype.replaceSelectionWith = function replaceSelectionWith (node, inheritMarks) {
     var selection = this.selection;
     if (inheritMarks !== false)
-      { node = node.mark(this.storedMarks || (selection.empty ? selection.$from.marks() : (selection.$from.marksAcross(selection.$to) || prosemirrorModel.Mark.none))); }
+      { node = node.mark(this.storedMarks || (selection.empty ? selection.$from.marks() : (selection.$from.marksAcross(selection.$to) || prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Mark"].none))); }
     selection.replaceWith(this, node);
     return this
   };
@@ -45476,9 +45749,7 @@ var Transaction = (function (Transform$$1) {
   // Returns true if this transaction doesn't contain any metadata,
   // and can thus safely be extended.
   prototypeAccessors.isGeneric.get = function () {
-    var this$1 = this;
-
-    for (var _ in this$1.meta) { return false }
+    for (var _ in this.meta) { return false }
     return true
   };
 
@@ -45497,7 +45768,7 @@ var Transaction = (function (Transform$$1) {
   Object.defineProperties( Transaction.prototype, prototypeAccessors );
 
   return Transaction;
-}(prosemirrorTransform.Transform));
+}(prosemirror_transform__WEBPACK_IMPORTED_MODULE_1__["Transform"]));
 
 function bind(f, self) {
   return !self || !f ? f : f.bind(self)
@@ -45561,7 +45832,7 @@ var EditorState = function EditorState(config) {
   this.config = config;
 };
 
-var prototypeAccessors$1 = { schema: {},plugins: {},tr: {} };
+var prototypeAccessors$1 = { schema: { configurable: true },plugins: { configurable: true },tr: { configurable: true } };
 
 // doc:: Node
 // The current document.
@@ -45593,12 +45864,11 @@ EditorState.prototype.apply = function apply (tr) {
 
 // : (Transaction) → bool
 EditorState.prototype.filterTransaction = function filterTransaction (tr, ignore) {
-    var this$1 = this;
     if ( ignore === void 0 ) ignore = -1;
 
   for (var i = 0; i < this.config.plugins.length; i++) { if (i != ignore) {
-    var plugin = this$1.config.plugins[i];
-    if (plugin.spec.filterTransaction && !plugin.spec.filterTransaction.call(plugin, tr, this$1))
+    var plugin = this.config.plugins[i];
+    if (plugin.spec.filterTransaction && !plugin.spec.filterTransaction.call(plugin, tr, this))
       { return false }
   } }
   return true
@@ -45611,20 +45881,18 @@ EditorState.prototype.filterTransaction = function filterTransaction (tr, ignore
 // hooks](#state.PluginSpec.filterTransaction) of
 // plugins) along with the new state.
 EditorState.prototype.applyTransaction = function applyTransaction (rootTr) {
-    var this$1 = this;
-
   if (!this.filterTransaction(rootTr)) { return {state: this, transactions: []} }
 
   var trs = [rootTr], newState = this.applyInner(rootTr), seen = null;
   // This loop repeatedly gives plugins a chance to respond to
   // transactions as new transactions are added, making sure to only
   // pass the transactions the plugin did not see before.
-  outer: for (;;) {
+   for (;;) {
     var haveNew = false;
     for (var i = 0; i < this.config.plugins.length; i++) {
-      var plugin = this$1.config.plugins[i];
+      var plugin = this.config.plugins[i];
       if (plugin.spec.appendTransaction) {
-        var n = seen ? seen[i].n : 0, oldState = seen ? seen[i].state : this$1;
+        var n = seen ? seen[i].n : 0, oldState = seen ? seen[i].state : this;
         var tr = n < trs.length &&
             plugin.spec.appendTransaction.call(plugin, n ? trs.slice(n) : trs, oldState, newState);
         if (tr && newState.filterTransaction(tr, i)) {
@@ -45632,7 +45900,7 @@ EditorState.prototype.applyTransaction = function applyTransaction (rootTr) {
           if (!seen) {
             seen = [];
             for (var j = 0; j < this.config.plugins.length; j++)
-              { seen.push(j < i ? {state: newState, n: trs.length} : {state: this$1, n: 0}); }
+              { seen.push(j < i ? {state: newState, n: trs.length} : {state: this, n: 0}); }
           }
           trs.push(tr);
           newState = newState.applyInner(tr);
@@ -45647,15 +45915,13 @@ EditorState.prototype.applyTransaction = function applyTransaction (rootTr) {
 
 // : (Transaction) → EditorState
 EditorState.prototype.applyInner = function applyInner (tr) {
-    var this$1 = this;
-
   if (!tr.before.eq(this.doc)) { throw new RangeError("Applying a mismatched transaction") }
   var newInstance = new EditorState(this.config), fields = this.config.fields;
   for (var i = 0; i < fields.length; i++) {
     var field = fields[i];
-    newInstance[field.name] = field.apply(tr, this$1[field.name], this$1, newInstance);
+    newInstance[field.name] = field.apply(tr, this[field.name], this, newInstance);
   }
-  for (var i$1 = 0; i$1 < applyListeners.length; i$1++) { applyListeners[i$1](this$1, tr, newInstance); }
+  for (var i$1 = 0; i$1 < applyListeners.length; i$1++) { applyListeners[i$1](this, tr, newInstance); }
   return newInstance
 };
 
@@ -45706,13 +45972,11 @@ EditorState.create = function create (config) {
 //   plugins:: ?[Plugin]
 //   New set of active plugins.
 EditorState.prototype.reconfigure = function reconfigure (config) {
-    var this$1 = this;
-
   var $config = new Configuration(config.schema || this.schema, config.plugins);
   var fields = $config.fields, instance = new EditorState($config);
   for (var i = 0; i < fields.length; i++) {
     var name = fields[i].name;
-    instance[name] = this$1.hasOwnProperty(name) ? this$1[name] : fields[i].init(config, instance);
+    instance[name] = this.hasOwnProperty(name) ? this[name] : fields[i].init(config, instance);
   }
   return instance
 };
@@ -45724,15 +45988,13 @@ EditorState.prototype.reconfigure = function reconfigure (config) {
 // a string or number, in which case it is ignored, to support the
 // way `JSON.stringify` calls `toString` methods.
 EditorState.prototype.toJSON = function toJSON (pluginFields) {
-    var this$1 = this;
-
   var result = {doc: this.doc.toJSON(), selection: this.selection.toJSON()};
   if (this.storedMarks) { result.storedMarks = this.storedMarks.map(function (m) { return m.toJSON(); }); }
   if (pluginFields && typeof pluginFields == 'object') { for (var prop in pluginFields) {
     if (prop == "doc" || prop == "selection")
       { throw new RangeError("The JSON fields `doc` and `selection` are reserved") }
     var plugin = pluginFields[prop], state = plugin.spec.state;
-    if (state && state.toJSON) { result[prop] = state.toJSON.call(plugin, this$1[plugin.key]); }
+    if (state && state.toJSON) { result[prop] = state.toJSON.call(plugin, this[plugin.key]); }
   } }
   return result
 };
@@ -45758,7 +46020,7 @@ EditorState.fromJSON = function fromJSON (config, json, pluginFields) {
   var instance = new EditorState($config);
   $config.fields.forEach(function (field) {
     if (field.name == "doc") {
-      instance.doc = prosemirrorModel.Node.fromJSON(config.schema, json.doc);
+      instance.doc = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Node"].fromJSON(config.schema, json.doc);
     } else if (field.name == "selection") {
       instance.selection = Selection.fromJSON(instance.doc, json.selection);
     } else if (field.name == "storedMarks") {
@@ -45926,37 +46188,75 @@ PluginKey.prototype.get = function get (state) { return state.config.pluginsByKe
 // Get the plugin's state from an editor state.
 PluginKey.prototype.getState = function getState (state) { return state[this.key] };
 
-exports.Selection = Selection;
-exports.SelectionRange = SelectionRange;
-exports.TextSelection = TextSelection;
-exports.NodeSelection = NodeSelection;
-exports.AllSelection = AllSelection;
-exports.Transaction = Transaction;
-exports.EditorState = EditorState;
-exports.Plugin = Plugin;
-exports.PluginKey = PluginKey;
-//# sourceMappingURL=index.js.map
+
+//# sourceMappingURL=index.es.js.map
 
 
 /***/ }),
 
-/***/ "./node_modules/prosemirror-tables/dist/index.js":
-/*!*******************************************************!*\
-  !*** ./node_modules/prosemirror-tables/dist/index.js ***!
-  \*******************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
+/***/ "./node_modules/prosemirror-tables/dist/index.es.js":
+/*!**********************************************************!*\
+  !*** ./node_modules/prosemirror-tables/dist/index.es.js ***!
+  \**********************************************************/
+/*! exports provided: CellSelection, TableMap, __clipCells, __insertCells, __pastedCells, addColumn, addColumnAfter, addColumnBefore, addRow, addRowAfter, addRowBefore, cellAround, colCount, columnResizing, columnResizingPluginKey, deleteColumn, deleteRow, deleteTable, findCell, fixTables, fixTablesKey, goToNextCell, handlePaste, inSameTable, isInTable, mergeCells, moveCellForward, nextCell, removeColumn, removeRow, rowIsHeader, selectedRect, selectionCell, setCellAttr, splitCell, splitCellWithType, tableEditing, tableEditingKey, tableNodes, toggleHeader, toggleHeaderCell, toggleHeaderColumn, toggleHeaderRow, updateColumnsOnResize */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "CellSelection", function() { return CellSelection; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "TableMap", function() { return TableMap; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "__clipCells", function() { return clipCells; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "__insertCells", function() { return insertCells; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "__pastedCells", function() { return pastedCells; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "addColumn", function() { return addColumn; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "addColumnAfter", function() { return addColumnAfter; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "addColumnBefore", function() { return addColumnBefore; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "addRow", function() { return addRow; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "addRowAfter", function() { return addRowAfter; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "addRowBefore", function() { return addRowBefore; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "cellAround", function() { return cellAround; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "colCount", function() { return colCount; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "columnResizing", function() { return columnResizing; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "columnResizingPluginKey", function() { return key$1; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "deleteColumn", function() { return deleteColumn; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "deleteRow", function() { return deleteRow; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "deleteTable", function() { return deleteTable; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "findCell", function() { return findCell; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "fixTables", function() { return fixTables; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "fixTablesKey", function() { return fixTablesKey; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "goToNextCell", function() { return goToNextCell; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "handlePaste", function() { return handlePaste; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "inSameTable", function() { return inSameTable; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "isInTable", function() { return isInTable; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "mergeCells", function() { return mergeCells; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "moveCellForward", function() { return moveCellForward; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "nextCell", function() { return nextCell; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "removeColumn", function() { return removeColumn; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "removeRow", function() { return removeRow; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "rowIsHeader", function() { return rowIsHeader; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "selectedRect", function() { return selectedRect; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "selectionCell", function() { return selectionCell; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "setCellAttr", function() { return setCellAttr; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "splitCell", function() { return splitCell; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "splitCellWithType", function() { return splitCellWithType; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "tableEditing", function() { return tableEditing; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "tableEditingKey", function() { return key; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "tableNodes", function() { return tableNodes; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "toggleHeader", function() { return toggleHeader; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "toggleHeaderCell", function() { return toggleHeaderCell; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "toggleHeaderColumn", function() { return toggleHeaderColumn; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "toggleHeaderRow", function() { return toggleHeaderRow; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "updateColumnsOnResize", function() { return updateColumns; });
+/* harmony import */ var prosemirror_state__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.es.js");
+/* harmony import */ var prosemirror_model__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.es.js");
+/* harmony import */ var prosemirror_keymap__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! prosemirror-keymap */ "./node_modules/prosemirror-keymap/dist/index.es.js");
+/* harmony import */ var prosemirror_view__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! prosemirror-view */ "./node_modules/prosemirror-view/dist/index.es.js");
+/* harmony import */ var prosemirror_transform__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! prosemirror-transform */ "./node_modules/prosemirror-transform/dist/index.es.js");
 
 
-Object.defineProperty(exports, '__esModule', { value: true });
 
-var prosemirrorState = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.js");
-var prosemirrorView = __webpack_require__(/*! prosemirror-view */ "./node_modules/prosemirror-view/dist/index.js");
-var prosemirrorModel = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.js");
-var prosemirrorTransform = __webpack_require__(/*! prosemirror-transform */ "./node_modules/prosemirror-transform/dist/index.js");
-var prosemirrorKeymap = __webpack_require__(/*! prosemirror-keymap */ "./node_modules/prosemirror-keymap/dist/keymap.js");
+
+
 
 // Because working with row and column-spanning cells is not quite
 // trivial, this code builds up a descriptive structure for a given
@@ -46016,12 +46316,10 @@ var TableMap = function TableMap(width, height, map, problems) {
 // :: (number) → Rect
 // Find the dimensions of the cell at the given position.
 TableMap.prototype.findCell = function findCell (pos) {
-    var this$1 = this;
-
   for (var i = 0; i < this.map.length; i++) {
-    var curPos = this$1.map[i];
+    var curPos = this.map[i];
     if (curPos != pos) { continue }
-    var left = i % this$1.width, top = (i / this$1.width) | 0;
+    var left = i % this.width, top = (i / this.width) | 0;
     var right = left + 1, bottom = top + 1;
     for (var j = 1; right < this.width && this.map[i + j] == curPos; j++) { right++; }
     for (var j$1 = 1; bottom < this.height && this.map[i + (this.width * j$1)] == curPos; j$1++) { bottom++; }
@@ -46033,10 +46331,8 @@ TableMap.prototype.findCell = function findCell (pos) {
 // :: (number) → number
 // Find the left side of the cell at the given position.
 TableMap.prototype.colCount = function colCount (pos) {
-    var this$1 = this;
-
   for (var i = 0; i < this.map.length; i++)
-    { if (this$1.map[i] == pos) { return i % this$1.width } }
+    { if (this.map[i] == pos) { return i % this.width } }
   throw new RangeError("No cell with offset " + pos + " found")
 };
 
@@ -46079,16 +46375,14 @@ TableMap.prototype.rectBetween = function rectBetween (a, b) {
 // Return the position of all cells that have the top left corner in
 // the given rectangle.
 TableMap.prototype.cellsInRect = function cellsInRect (rect) {
-    var this$1 = this;
-
   var result = [], seen = {};
   for (var row = rect.top; row < rect.bottom; row++) {
     for (var col = rect.left; col < rect.right; col++) {
-      var index = row * this$1.width + col, pos = this$1.map[index];
+      var index = row * this.width + col, pos = this.map[index];
       if (seen[pos]) { continue }
       seen[pos] = true;
-      if ((col != rect.left || !col || this$1.map[index - 1] != pos) &&
-          (row != rect.top || !row || this$1.map[index - this$1.width] != pos))
+      if ((col != rect.left || !col || this.map[index - 1] != pos) &&
+          (row != rect.top || !row || this.map[index - this.width] != pos))
         { result.push(pos); }
     }
   }
@@ -46099,15 +46393,13 @@ TableMap.prototype.cellsInRect = function cellsInRect (rect) {
 // Return the position at which the cell at the given row and column
 // starts, or would start, if a cell started there.
 TableMap.prototype.positionAt = function positionAt (row, col, table) {
-    var this$1 = this;
-
   for (var i = 0, rowStart = 0;; i++) {
     var rowEnd = rowStart + table.child(i).nodeSize;
     if (i == row) {
-      var index = col + row * this$1.width, rowEndIndex = (row + 1) * this$1.width;
+      var index = col + row * this.width, rowEndIndex = (row + 1) * this.width;
       // Skip past cells from previous rows (via rowspan)
       while (index < rowEndIndex && this.map[index] < rowStart) { index++; }
-      return index == rowEndIndex ? rowEnd - 1 : this$1.map[index]
+      return index == rowEndIndex ? rowEnd - 1 : this.map[index]
     }
     rowStart = rowEnd;
   }
@@ -46230,7 +46522,7 @@ function freshColWidth(attrs) {
 
 // Various helper function for working with tables
 
-var key = new prosemirrorState.PluginKey("selectingCells");
+var key = new prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["PluginKey"]("selectingCells");
 
 function cellAround($pos) {
   for (var d = $pos.depth - 1; d > 0; d--)
@@ -46336,7 +46628,7 @@ function addColSpan(attrs, pos, n) {
 // With the plugin enabled, these will be created when the user
 // selects across cells, and will be drawn by giving selected cells a
 // `selectedCell` CSS class.
-var CellSelection = (function (Selection) {
+var CellSelection = /*@__PURE__*/(function (Selection) {
   function CellSelection($anchorCell, $headCell) {
     if ( $headCell === void 0 ) $headCell = $anchorCell;
 
@@ -46349,7 +46641,7 @@ var CellSelection = (function (Selection) {
     cells.unshift($headCell.pos - start);
     var ranges = cells.map(function (pos) {
       var cell = table.nodeAt(pos), from = pos + start + 1;
-      return new prosemirrorState.SelectionRange(doc.resolve(from), doc.resolve(from + cell.content.size))
+      return new prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["SelectionRange"](doc.resolve(from), doc.resolve(from + cell.content.size))
     });
     Selection.call(this, ranges[0].$from, ranges[0].$to, ranges);
     // :: ResolvedPos
@@ -46378,7 +46670,7 @@ var CellSelection = (function (Selection) {
       else
         { return new CellSelection($anchorCell, $headCell) }
     }
-    return prosemirrorState.TextSelection.between($anchorCell, $headCell)
+    return prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"].between($anchorCell, $headCell)
   };
 
   // :: () → Slice
@@ -46411,15 +46703,15 @@ var CellSelection = (function (Selection) {
           rowContent.push(cell);
         }
       }
-      rows.push(table.child(row).copy(prosemirrorModel.Fragment.from(rowContent)));
+      rows.push(table.child(row).copy(prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(rowContent)));
     }
 
     var fragment = this.isColSelection() && this.isRowSelection() ? table : rows;
-    return new prosemirrorModel.Slice(prosemirrorModel.Fragment.from(fragment), 1, 1)
+    return new prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"](prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(fragment), 1, 1)
   };
 
   CellSelection.prototype.replace = function replace (tr, content) {
-    if ( content === void 0 ) content = prosemirrorModel.Slice.empty;
+    if ( content === void 0 ) content = prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"].empty;
 
     var mapFrom = tr.steps.length, ranges = this.ranges;
     for (var i = 0; i < ranges.length; i++) {
@@ -46427,14 +46719,14 @@ var CellSelection = (function (Selection) {
       var $from = ref.$from;
       var $to = ref.$to;
       var mapping = tr.mapping.slice(mapFrom);
-      tr.replace(mapping.map($from.pos), mapping.map($to.pos), i ? prosemirrorModel.Slice.empty : content);
+      tr.replace(mapping.map($from.pos), mapping.map($to.pos), i ? prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"].empty : content);
     }
     var sel = Selection.findFrom(tr.doc.resolve(tr.mapping.slice(mapFrom).map(this.to)), -1);
     if (sel) { tr.setSelection(sel); }
   };
 
   CellSelection.prototype.replaceWith = function replaceWith (tr, node) {
-    this.replace(tr, new prosemirrorModel.Slice(prosemirrorModel.Fragment.from(node), 0, 0));
+    this.replace(tr, new prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"](prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(node), 0, 0));
   };
 
   CellSelection.prototype.forEachCell = function forEachCell (f) {
@@ -46537,11 +46829,11 @@ var CellSelection = (function (Selection) {
   CellSelection.prototype.getBookmark = function getBookmark () { return new CellBookmark(this.$anchorCell.pos, this.$headCell.pos) };
 
   return CellSelection;
-}(prosemirrorState.Selection));
+}(prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["Selection"]));
 
 CellSelection.prototype.visible = false;
 
-prosemirrorState.Selection.jsonID("cell", CellSelection);
+prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["Selection"].jsonID("cell", CellSelection);
 
 var CellBookmark = function CellBookmark(anchor, head) {
   this.anchor = anchor;
@@ -46559,16 +46851,16 @@ CellBookmark.prototype.resolve = function resolve (doc) {
       inSameTable($anchorCell, $headCell))
     { return new CellSelection($anchorCell, $headCell) }
   else
-    { return prosemirrorState.Selection.near($headCell, 1) }
+    { return prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["Selection"].near($headCell, 1) }
 };
 
 function drawCellSelection(state) {
   if (!(state.selection instanceof CellSelection)) { return null }
   var cells = [];
   state.selection.forEachCell(function (node, pos) {
-    cells.push(prosemirrorView.Decoration.node(pos, pos + node.nodeSize, {class: "selectedCell"}));
+    cells.push(prosemirror_view__WEBPACK_IMPORTED_MODULE_3__["Decoration"].node(pos, pos + node.nodeSize, {class: "selectedCell"}));
   });
-  return prosemirrorView.DecorationSet.create(state.doc, cells)
+  return prosemirror_view__WEBPACK_IMPORTED_MODULE_3__["DecorationSet"].create(state.doc, cells)
 }
 
 function isCellBoundarySelection(ref) {
@@ -46612,7 +46904,7 @@ function isTextSelectionAcrossCells(ref) {
 
 function normalizeSelection(state, tr, allowTableNodeSelection) {
   var sel = (tr || state).selection, doc = (tr || state).doc, normalize, role;
-  if (sel instanceof prosemirrorState.NodeSelection && (role = sel.node.type.spec.tableRole)) {
+  if (sel instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"] && (role = sel.node.type.spec.tableRole)) {
     if (role == "cell" || role == "header_cell") {
       normalize = CellSelection.create(doc, sel.from);
     } else if (role == "row") {
@@ -46623,10 +46915,10 @@ function normalizeSelection(state, tr, allowTableNodeSelection) {
       var lastCell = start + map.map[map.width * map.height - 1];
       normalize = CellSelection.create(doc, start + 1, lastCell);
     }
-  } else if (sel instanceof prosemirrorState.TextSelection && isCellBoundarySelection(sel)) {
-    normalize = prosemirrorState.TextSelection.create(doc, sel.from);
-  } else if (sel instanceof prosemirrorState.TextSelection && isTextSelectionAcrossCells(sel)) {
-    normalize = prosemirrorState.TextSelection.create(doc, sel.$from.start(), sel.$from.end());
+  } else if (sel instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"] && isCellBoundarySelection(sel)) {
+    normalize = prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"].create(doc, sel.from);
+  } else if (sel instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"] && isTextSelectionAcrossCells(sel)) {
+    normalize = prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"].create(doc, sel.$from.start(), sel.$from.end());
   }
   if (normalize)
     { (tr || (tr = state.tr)).setSelection(normalize); }
@@ -46775,11 +47067,11 @@ function pastedCells(slice) {
       var cells = content.child(i).content;
       var left = i ? 0 : Math.max(0, openStart - 1);
       var right = i < content.childCount - 1 ? 0 : Math.max(0, openEnd - 1);
-      if (left || right) { cells = fitSlice(tableNodeTypes(schema).row, new prosemirrorModel.Slice(cells, left, right)).content; }
+      if (left || right) { cells = fitSlice(tableNodeTypes(schema).row, new prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"](cells, left, right)).content; }
       rows.push(cells);
     }
   } else if (role == "cell" || role == "header_cell") {
-    rows.push(openStart || openEnd ? fitSlice(tableNodeTypes(schema).row, new prosemirrorModel.Slice(content, openStart, openEnd)).content : content);
+    rows.push(openStart || openEnd ? fitSlice(tableNodeTypes(schema).row, new prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"](content, openStart, openEnd)).content : content);
   } else {
     return null
   }
@@ -46804,11 +47096,11 @@ function ensureRectangular(schema, rows) {
   var width = 0;
   for (var r$1 = 0; r$1 < widths.length; r$1++) { width = Math.max(width, widths[r$1]); }
   for (var r$2 = 0; r$2 < widths.length; r$2++) {
-    if (r$2 >= rows.length) { rows.push(prosemirrorModel.Fragment.empty); }
+    if (r$2 >= rows.length) { rows.push(prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].empty); }
     if (widths[r$2] < width) {
       var empty = tableNodeTypes(schema).cell.createAndFill(), cells = [];
       for (var i$1 = widths[r$2]; i$1 < width; i$1++) { cells.push(empty); }
-      rows[r$2] = rows[r$2].append(prosemirrorModel.Fragment.from(cells));
+      rows[r$2] = rows[r$2].append(prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(cells));
     }
   }
   return {height: rows.length, width: width, rows: rows}
@@ -46816,7 +47108,7 @@ function ensureRectangular(schema, rows) {
 
 function fitSlice(nodeType, slice) {
   var node = nodeType.createAndFill();
-  var tr = new prosemirrorTransform.Transform(node).replace(0, node.content.size, slice);
+  var tr = new prosemirror_transform__WEBPACK_IMPORTED_MODULE_4__["Transform"](node).replace(0, node.content.size, slice);
   return tr.doc
 }
 
@@ -46842,7 +47134,7 @@ function clipCells(ref, newWidth, newHeight) {
         for (var j = 1; j < cell.attrs.rowspan; j++)
           { added[row + j] = (added[row + j] || 0) + cell.attrs.colspan; }
       }
-      newRows.push(prosemirrorModel.Fragment.from(cells));
+      newRows.push(prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(cells));
     }
     rows = newRows;
     width = newWidth;
@@ -46858,7 +47150,7 @@ function clipCells(ref, newWidth, newHeight) {
           { cell$1 = cell$1.type.create(setAttr(cell$1.attrs, "rowspan", newHeight - cell$1.attrs.rowspan), cell$1.content); }
         cells$1.push(cell$1);
       }
-      newRows$1.push(prosemirrorModel.Fragment.from(cells$1));
+      newRows$1.push(prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(cells$1));
     }
     rows = newRows$1;
     height = newHeight;
@@ -46894,7 +47186,7 @@ function growTable(tr, map, table, start, width, height, mapFrom) {
                  : (empty || (empty = types.cell.createAndFill())));
     }
 
-    var emptyRow = types.row.create(null, prosemirrorModel.Fragment.from(cells$1)), rows = [];
+    var emptyRow = types.row.create(null, prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(cells$1)), rows = [];
     for (var i$2 = map.height; i$2 < height; i$2++) { rows.push(emptyRow); }
     tr.insert(tr.mapping.slice(mapFrom).map(start + table.nodeSize - 2), rows);
   }
@@ -46970,7 +47262,7 @@ function insertCells(state, dispatch, tableStart, rect, cells) {
   for (var row = top; row < bottom; row++) {
     var from = map.positionAt(row, left, table), to = map.positionAt(row, right, table);
     tr.replace(tr.mapping.slice(mapFrom).map(from + tableStart), tr.mapping.slice(mapFrom).map(to + tableStart),
-               new prosemirrorModel.Slice(cells.rows[row - top], 0, 0));
+               new prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"](cells.rows[row - top], 0, 0));
   }
   recomp();
   tr.setSelection(new CellSelection(tr.doc.resolve(tableStart + map.positionAt(top, left, table)),
@@ -46980,7 +47272,7 @@ function insertCells(state, dispatch, tableStart, rect, cells) {
 
 // This file defines a number of helpers for wiring up user input to
 
-var handleKeyDown = prosemirrorKeymap.keydownHandler({
+var handleKeyDown = Object(prosemirror_keymap__WEBPACK_IMPORTED_MODULE_2__["keydownHandler"])({
   "ArrowLeft": arrow("horiz", -1),
   "ArrowRight": arrow("horiz", 1),
   "ArrowUp": arrow("vert", -1),
@@ -47007,18 +47299,18 @@ function arrow(axis, dir) {
   return function (state, dispatch, view) {
     var sel = state.selection;
     if (sel instanceof CellSelection) {
-      return maybeSetSelection(state, dispatch, prosemirrorState.Selection.near(sel.$headCell, dir))
+      return maybeSetSelection(state, dispatch, prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["Selection"].near(sel.$headCell, dir))
     }
     if (axis != "horiz" && !sel.empty) { return false }
     var end = atEndOfCell(view, axis, dir);
     if (end == null) { return false }
     if (axis == "horiz") {
-      return maybeSetSelection(state, dispatch, prosemirrorState.Selection.near(state.doc.resolve(sel.head + dir), dir))
+      return maybeSetSelection(state, dispatch, prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["Selection"].near(state.doc.resolve(sel.head + dir), dir))
     } else {
       var $cell = state.doc.resolve(end), $next = nextCell($cell, axis, dir), newSel;
-      if ($next) { newSel = prosemirrorState.Selection.near($next, 1); }
-      else if (dir < 0) { newSel = prosemirrorState.Selection.near(state.doc.resolve($cell.before(-1)), -1); }
-      else { newSel = prosemirrorState.Selection.near(state.doc.resolve($cell.after(-1)), 1); }
+      if ($next) { newSel = prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["Selection"].near($next, 1); }
+      else if (dir < 0) { newSel = prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["Selection"].near(state.doc.resolve($cell.before(-1)), -1); }
+      else { newSel = prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["Selection"].near(state.doc.resolve($cell.after(-1)), 1); }
       return maybeSetSelection(state, dispatch, newSel)
     }
   }
@@ -47046,7 +47338,7 @@ function deleteCellSelection(state, dispatch) {
     sel.forEachCell(function (cell, pos) {
       if (!cell.content.eq(baseContent))
         { tr.replace(tr.mapping.map(pos + 1), tr.mapping.map(pos + cell.nodeSize - 1),
-                   new prosemirrorModel.Slice(baseContent, 0, 0)); }
+                   new prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"](baseContent, 0, 0)); }
     });
     if (tr.docChanged) { dispatch(tr); }
   }
@@ -47064,7 +47356,7 @@ function handlePaste(view, _, slice) {
   if (!isInTable(view.state)) { return false }
   var cells = pastedCells(slice), sel = view.state.selection;
   if (sel instanceof CellSelection) {
-    if (!cells) { cells = {width: 1, height: 1, rows: [prosemirrorModel.Fragment.from(fitSlice(tableNodeTypes(view.state.schema).cell, slice))]}; }
+    if (!cells) { cells = {width: 1, height: 1, rows: [prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(fitSlice(tableNodeTypes(view.state.schema).cell, slice))]}; }
     var table = sel.$anchorCell.node(-1), start = sel.$anchorCell.start(-1);
     var rect = TableMap.get(table).rectBetween(sel.$anchorCell.pos - start, sel.$headCell.pos - start);
     cells = clipCells(cells, rect.right - rect.left, rect.bottom - rect.top);
@@ -47144,7 +47436,7 @@ function handleMouseDown(view, startEvent) {
 // Check whether the cursor is at the end of a cell (so that further
 // motion would move out of the cell)
 function atEndOfCell(view, axis, dir) {
-  if (!(view.state.selection instanceof prosemirrorState.TextSelection)) { return null }
+  if (!(view.state.selection instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"])) { return null }
   var ref = view.state.selection;
   var $head = ref.$head;
   for (var d = $head.depth - 1; d >= 0; d--) {
@@ -47172,7 +47464,7 @@ function cellUnderMouse(view, event) {
 
 // This file defines helpers for normalizing tables, making sure no
 
-var fixTablesKey = new prosemirrorState.PluginKey("fix-tables");
+var fixTablesKey = new prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["PluginKey"]("fix-tables");
 
 // Helper for iterating through the nodes in a document that changed
 // compared to the given previous document. Useful for avoiding
@@ -47524,7 +47816,7 @@ function mergeCells(state, dispatch) {
   var map = rect.map;
   if (cellsOverlapRectangle(map, rect)) { return false }
   if (dispatch) {
-    var tr = state.tr, seen = {}, content = prosemirrorModel.Fragment.empty, mergedPos, mergedCell;
+    var tr = state.tr, seen = {}, content = prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].empty, mergedPos, mergedCell;
     for (var row = rect.top; row < rect.bottom; row++) {
       for (var col = rect.left; col < rect.right; col++) {
         var cellPos = map.map[row * map.width + col], cell = rect.table.nodeAt(cellPos);
@@ -47757,7 +48049,7 @@ function goToNextCell(direction) {
     if (cell == null) { return }
     if (dispatch) {
       var $cell = state.doc.resolve(cell);
-      dispatch(state.tr.setSelection(prosemirrorState.TextSelection.between($cell, moveCellForward($cell))).scrollIntoView());
+      dispatch(state.tr.setSelection(prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"].between($cell, moveCellForward($cell))).scrollIntoView());
     }
     return true
   }
@@ -47835,7 +48127,7 @@ function updateColumns(node, colgroup, table, cellMinWidth, overrideCol, overrid
   }
 }
 
-var key$1 = new prosemirrorState.PluginKey("tableColumnResizing");
+var key$1 = new prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["PluginKey"]("tableColumnResizing");
 
 function columnResizing(ref) {
   if ( ref === void 0 ) ref = {};
@@ -47844,7 +48136,7 @@ function columnResizing(ref) {
   var View = ref.View; if ( View === void 0 ) View = TableView;
   var lastColumnResizable = ref.lastColumnResizable; if ( lastColumnResizable === void 0 ) lastColumnResizable = true;
 
-  var plugin = new prosemirrorState.Plugin({
+  var plugin = new prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["Plugin"]({
     key: key$1,
     state: {
       init: function init(_, state) {
@@ -48058,10 +48350,10 @@ function handleDecorations(state, cell) {
       var pos = start + cellPos + table.nodeAt(cellPos).nodeSize - 1;
       var dom = document.createElement("div");
       dom.className = "column-resize-handle";
-      decorations.push(prosemirrorView.Decoration.widget(pos, dom));
+      decorations.push(prosemirror_view__WEBPACK_IMPORTED_MODULE_3__["Decoration"].widget(pos, dom));
     }
   }
-  return prosemirrorView.DecorationSet.create(state.doc, decorations)
+  return prosemirror_view__WEBPACK_IMPORTED_MODULE_3__["DecorationSet"].create(state.doc, decorations)
 }
 
 // This file defines a plugin that handles the drawing of cell
@@ -48082,7 +48374,7 @@ function tableEditing(ref) {
   if ( ref === void 0 ) ref = {};
   var allowTableNodeSelection = ref.allowTableNodeSelection; if ( allowTableNodeSelection === void 0 ) allowTableNodeSelection = false;
 
-  return new prosemirrorState.Plugin({
+  return new prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["Plugin"]({
     key: key,
 
     // This piece of state is used to remember when a mouse-drag
@@ -48125,66 +48417,42 @@ function tableEditing(ref) {
   })
 }
 
-exports.tableEditing = tableEditing;
-exports.fixTables = fixTables;
-exports.handlePaste = handlePaste;
-exports.fixTablesKey = fixTablesKey;
-exports.tableEditingKey = key;
-exports.cellAround = cellAround;
-exports.isInTable = isInTable;
-exports.selectionCell = selectionCell;
-exports.moveCellForward = moveCellForward;
-exports.inSameTable = inSameTable;
-exports.findCell = findCell;
-exports.colCount = colCount;
-exports.nextCell = nextCell;
-exports.tableNodes = tableNodes;
-exports.CellSelection = CellSelection;
-exports.TableMap = TableMap;
-exports.columnResizing = columnResizing;
-exports.columnResizingPluginKey = key$1;
-exports.updateColumnsOnResize = updateColumns;
-exports.__pastedCells = pastedCells;
-exports.__insertCells = insertCells;
-exports.__clipCells = clipCells;
-exports.addColumn = addColumn;
-exports.addColumnBefore = addColumnBefore;
-exports.addColumnAfter = addColumnAfter;
-exports.removeColumn = removeColumn;
-exports.deleteColumn = deleteColumn;
-exports.addRow = addRow;
-exports.addRowBefore = addRowBefore;
-exports.addRowAfter = addRowAfter;
-exports.removeRow = removeRow;
-exports.deleteRow = deleteRow;
-exports.mergeCells = mergeCells;
-exports.splitCell = splitCell;
-exports.splitCellWithType = splitCellWithType;
-exports.setCellAttr = setCellAttr;
-exports.toggleHeader = toggleHeader;
-exports.toggleHeaderRow = toggleHeaderRow;
-exports.toggleHeaderColumn = toggleHeaderColumn;
-exports.toggleHeaderCell = toggleHeaderCell;
-exports.goToNextCell = goToNextCell;
-exports.deleteTable = deleteTable;
-//# sourceMappingURL=index.js.map
+
+//# sourceMappingURL=index.es.js.map
 
 
 /***/ }),
 
-/***/ "./node_modules/prosemirror-transform/dist/index.js":
-/*!**********************************************************!*\
-  !*** ./node_modules/prosemirror-transform/dist/index.js ***!
-  \**********************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
+/***/ "./node_modules/prosemirror-transform/dist/index.es.js":
+/*!*************************************************************!*\
+  !*** ./node_modules/prosemirror-transform/dist/index.es.js ***!
+  \*************************************************************/
+/*! exports provided: AddMarkStep, MapResult, Mapping, RemoveMarkStep, ReplaceAroundStep, ReplaceStep, Step, StepMap, StepResult, Transform, TransformError, canJoin, canSplit, dropPoint, findWrapping, insertPoint, joinPoint, liftTarget, replaceStep */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "AddMarkStep", function() { return AddMarkStep; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "MapResult", function() { return MapResult; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Mapping", function() { return Mapping; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RemoveMarkStep", function() { return RemoveMarkStep; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "ReplaceAroundStep", function() { return ReplaceAroundStep; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "ReplaceStep", function() { return ReplaceStep; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Step", function() { return Step; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "StepMap", function() { return StepMap; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "StepResult", function() { return StepResult; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Transform", function() { return Transform; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "TransformError", function() { return TransformError; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "canJoin", function() { return canJoin; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "canSplit", function() { return canSplit; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "dropPoint", function() { return dropPoint; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "findWrapping", function() { return findWrapping; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "insertPoint", function() { return insertPoint; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "joinPoint", function() { return joinPoint; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "liftTarget", function() { return liftTarget; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "replaceStep", function() { return replaceStep; });
+/* harmony import */ var prosemirror_model__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.es.js");
 
-
-Object.defineProperty(exports, '__esModule', { value: true });
-
-var prosemirrorModel = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.js");
 
 // Mappable:: interface
 // There are several things that positions can be mapped through.
@@ -48248,11 +48516,9 @@ var StepMap = function StepMap(ranges, inverted) {
 };
 
 StepMap.prototype.recover = function recover (value) {
-    var this$1 = this;
-
   var diff = 0, index = recoverIndex(value);
   if (!this.inverted) { for (var i = 0; i < index; i++)
-    { diff += this$1.ranges[i * 3 + 2] - this$1.ranges[i * 3 + 1]; } }
+    { diff += this.ranges[i * 3 + 2] - this.ranges[i * 3 + 1]; } }
   return this.ranges[index * 3] + diff + recoverOffset(value)
 };
 
@@ -48267,13 +48533,11 @@ StepMap.prototype.map = function map (pos, assoc) {
  return this._map(pos, assoc, true) };
 
 StepMap.prototype._map = function _map (pos, assoc, simple) {
-    var this$1 = this;
-
   var diff = 0, oldIndex = this.inverted ? 2 : 1, newIndex = this.inverted ? 1 : 2;
   for (var i = 0; i < this.ranges.length; i += 3) {
-    var start = this$1.ranges[i] - (this$1.inverted ? diff : 0);
+    var start = this.ranges[i] - (this.inverted ? diff : 0);
     if (start > pos) { break }
-    var oldSize = this$1.ranges[i + oldIndex], newSize = this$1.ranges[i + newIndex], end = start + oldSize;
+    var oldSize = this.ranges[i + oldIndex], newSize = this.ranges[i + newIndex], end = start + oldSize;
     if (pos <= end) {
       var side = !oldSize ? assoc : pos == start ? -1 : pos == end ? 1 : assoc;
       var result = start + diff + (side < 0 ? 0 : newSize);
@@ -48287,16 +48551,14 @@ StepMap.prototype._map = function _map (pos, assoc, simple) {
 };
 
 StepMap.prototype.touches = function touches (pos, recover) {
-    var this$1 = this;
-
   var diff = 0, index = recoverIndex(recover);
   var oldIndex = this.inverted ? 2 : 1, newIndex = this.inverted ? 1 : 2;
   for (var i = 0; i < this.ranges.length; i += 3) {
-    var start = this$1.ranges[i] - (this$1.inverted ? diff : 0);
+    var start = this.ranges[i] - (this.inverted ? diff : 0);
     if (start > pos) { break }
-    var oldSize = this$1.ranges[i + oldIndex], end = start + oldSize;
+    var oldSize = this.ranges[i + oldIndex], end = start + oldSize;
     if (pos <= end && i == index * 3) { return true }
-    diff += this$1.ranges[i + newIndex] - oldSize;
+    diff += this.ranges[i + newIndex] - oldSize;
   }
   return false
 };
@@ -48305,12 +48567,10 @@ StepMap.prototype.touches = function touches (pos, recover) {
 // Calls the given function on each of the changed ranges included in
 // this map.
 StepMap.prototype.forEach = function forEach (f) {
-    var this$1 = this;
-
   var oldIndex = this.inverted ? 2 : 1, newIndex = this.inverted ? 1 : 2;
   for (var i = 0, diff = 0; i < this.ranges.length; i += 3) {
-    var start = this$1.ranges[i], oldStart = start - (this$1.inverted ? diff : 0), newStart = start + (this$1.inverted ? 0 : diff);
-    var oldSize = this$1.ranges[i + oldIndex], newSize = this$1.ranges[i + newIndex];
+    var start = this.ranges[i], oldStart = start - (this.inverted ? diff : 0), newStart = start + (this.inverted ? 0 : diff);
+    var oldSize = this.ranges[i + oldIndex], newSize = this.ranges[i + newIndex];
     f(oldStart, oldStart + oldSize, newStart, newStart + newSize);
     diff += newSize - oldSize;
   }
@@ -48384,11 +48644,9 @@ Mapping.prototype.appendMap = function appendMap (map, mirrors) {
 // Add all the step maps in a given mapping to this one (preserving
 // mirroring information).
 Mapping.prototype.appendMapping = function appendMapping (mapping) {
-    var this$1 = this;
-
   for (var i = 0, startSize = this.maps.length; i < mapping.maps.length; i++) {
     var mirr = mapping.getMirror(i);
-    this$1.appendMap(mapping.maps[i], mirr != null && mirr < i ? startSize + mirr : null);
+    this.appendMap(mapping.maps[i], mirr != null && mirr < i ? startSize + mirr : null);
   }
 };
 
@@ -48397,10 +48655,8 @@ Mapping.prototype.appendMapping = function appendMapping (mapping) {
 // given offset, in this mapping (as per the second argument to
 // `appendMap`).
 Mapping.prototype.getMirror = function getMirror (n) {
-    var this$1 = this;
-
   if (this.mirror) { for (var i = 0; i < this.mirror.length; i++)
-    { if (this$1.mirror[i] == n) { return this$1.mirror[i + (i % 2 ? -1 : 1)] } } }
+    { if (this.mirror[i] == n) { return this.mirror[i + (i % 2 ? -1 : 1)] } } }
 };
 
 Mapping.prototype.setMirror = function setMirror (n, m) {
@@ -48411,11 +48667,9 @@ Mapping.prototype.setMirror = function setMirror (n, m) {
 // :: (Mapping)
 // Append the inverse of the given mapping to this one.
 Mapping.prototype.appendMappingInverted = function appendMappingInverted (mapping) {
-    var this$1 = this;
-
   for (var i = mapping.maps.length - 1, totalSize = this.maps.length + mapping.maps.length; i >= 0; i--) {
     var mirr = mapping.getMirror(i);
-    this$1.appendMap(mapping.maps[i].invert(), mirr != null && mirr > i ? totalSize - mirr - 1 : null);
+    this.appendMap(mapping.maps[i].invert(), mirr != null && mirr > i ? totalSize - mirr - 1 : null);
   }
 };
 
@@ -48430,12 +48684,11 @@ Mapping.prototype.invert = function invert () {
 // : (number, ?number) → number
 // Map a position through this mapping.
 Mapping.prototype.map = function map (pos, assoc) {
-    var this$1 = this;
     if ( assoc === void 0 ) assoc = 1;
 
   if (this.mirror) { return this._map(pos, assoc, true) }
   for (var i = this.from; i < this.to; i++)
-    { pos = this$1.maps[i].map(pos, assoc); }
+    { pos = this.maps[i].map(pos, assoc); }
   return pos
 };
 
@@ -48447,12 +48700,10 @@ Mapping.prototype.mapResult = function mapResult (pos, assoc) {
  return this._map(pos, assoc, false) };
 
 Mapping.prototype._map = function _map (pos, assoc, simple) {
-    var this$1 = this;
-
   var deleted = false, recoverables = null;
 
   for (var i = this.from; i < this.to; i++) {
-    var map = this$1.maps[i], rec = recoverables && recoverables[i];
+    var map = this.maps[i], rec = recoverables && recoverables[i];
     if (rec != null && map.touches(pos, rec)) {
       pos = map.recover(rec);
       continue
@@ -48460,14 +48711,14 @@ Mapping.prototype._map = function _map (pos, assoc, simple) {
 
     var result = map.mapResult(pos, assoc);
     if (result.recover != null) {
-      var corr = this$1.getMirror(i);
-      if (corr != null && corr > i && corr < this$1.to) {
+      var corr = this.getMirror(i);
+      if (corr != null && corr > i && corr < this.to) {
         if (result.deleted) {
           i = corr;
-          pos = this$1.maps[corr].recover(result.recover);
+          pos = this.maps[corr].recover(result.recover);
           continue
         } else {
-          (recoverables || (recoverables = Object.create(null)))[corr] = result.recover;
+(recoverables || (recoverables = Object.create(null)))[corr] = result.recover;
         }
       }
     }
@@ -48510,7 +48761,7 @@ var Transform = function Transform(doc) {
   this.mapping = new Mapping;
 };
 
-var prototypeAccessors = { before: {},docChanged: {} };
+var prototypeAccessors = { before: { configurable: true },docChanged: { configurable: true } };
 
 // :: Node The starting document.
 prototypeAccessors.before.get = function () { return this.docs.length ? this.docs[0] : this.doc };
@@ -48643,23 +48894,23 @@ StepResult.fromReplace = function fromReplace (doc, from, to, slice) {
   try {
     return StepResult.ok(doc.replace(from, to, slice))
   } catch (e) {
-    if (e instanceof prosemirrorModel.ReplaceError) { return StepResult.fail(e.message) }
+    if (e instanceof prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["ReplaceError"]) { return StepResult.fail(e.message) }
     throw e
   }
 };
 
 // ::- Replace a part of the document with a slice of new content.
-var ReplaceStep = (function (Step$$1) {
+var ReplaceStep = /*@__PURE__*/(function (Step) {
   function ReplaceStep(from, to, slice, structure) {
-    Step$$1.call(this);
+    Step.call(this);
     this.from = from;
     this.to = to;
     this.slice = slice;
     this.structure = !!structure;
   }
 
-  if ( Step$$1 ) ReplaceStep.__proto__ = Step$$1;
-  ReplaceStep.prototype = Object.create( Step$$1 && Step$$1.prototype );
+  if ( Step ) ReplaceStep.__proto__ = Step;
+  ReplaceStep.prototype = Object.create( Step && Step.prototype );
   ReplaceStep.prototype.constructor = ReplaceStep;
 
   ReplaceStep.prototype.apply = function apply (doc) {
@@ -48686,12 +48937,12 @@ var ReplaceStep = (function (Step$$1) {
     if (!(other instanceof ReplaceStep) || other.structure != this.structure) { return null }
 
     if (this.from + this.slice.size == other.from && !this.slice.openEnd && !other.slice.openStart) {
-      var slice = this.slice.size + other.slice.size == 0 ? prosemirrorModel.Slice.empty
-          : new prosemirrorModel.Slice(this.slice.content.append(other.slice.content), this.slice.openStart, other.slice.openEnd);
+      var slice = this.slice.size + other.slice.size == 0 ? prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].empty
+          : new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](this.slice.content.append(other.slice.content), this.slice.openStart, other.slice.openEnd);
       return new ReplaceStep(this.from, this.to + (other.to - other.from), slice, this.structure)
     } else if (other.to == this.from && !this.slice.openStart && !other.slice.openEnd) {
-      var slice$1 = this.slice.size + other.slice.size == 0 ? prosemirrorModel.Slice.empty
-          : new prosemirrorModel.Slice(other.slice.content.append(this.slice.content), other.slice.openStart, this.slice.openEnd);
+      var slice$1 = this.slice.size + other.slice.size == 0 ? prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].empty
+          : new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](other.slice.content.append(this.slice.content), other.slice.openStart, this.slice.openEnd);
       return new ReplaceStep(other.from, this.to, slice$1, this.structure)
     } else {
       return null
@@ -48708,7 +48959,7 @@ var ReplaceStep = (function (Step$$1) {
   ReplaceStep.fromJSON = function fromJSON (schema, json) {
     if (typeof json.from != "number" || typeof json.to != "number")
       { throw new RangeError("Invalid input for ReplaceStep.fromJSON") }
-    return new ReplaceStep(json.from, json.to, prosemirrorModel.Slice.fromJSON(schema, json.slice), !!json.structure)
+    return new ReplaceStep(json.from, json.to, prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].fromJSON(schema, json.slice), !!json.structure)
   };
 
   return ReplaceStep;
@@ -48719,9 +48970,9 @@ Step.jsonID("replace", ReplaceStep);
 // ::- Replace a part of the document with a slice of content, but
 // preserve a range of the replaced content by moving it into the
 // slice.
-var ReplaceAroundStep = (function (Step$$1) {
+var ReplaceAroundStep = /*@__PURE__*/(function (Step) {
   function ReplaceAroundStep(from, to, gapFrom, gapTo, slice, insert, structure) {
-    Step$$1.call(this);
+    Step.call(this);
     this.from = from;
     this.to = to;
     this.gapFrom = gapFrom;
@@ -48731,8 +48982,8 @@ var ReplaceAroundStep = (function (Step$$1) {
     this.structure = !!structure;
   }
 
-  if ( Step$$1 ) ReplaceAroundStep.__proto__ = Step$$1;
-  ReplaceAroundStep.prototype = Object.create( Step$$1 && Step$$1.prototype );
+  if ( Step ) ReplaceAroundStep.__proto__ = Step;
+  ReplaceAroundStep.prototype = Object.create( Step && Step.prototype );
   ReplaceAroundStep.prototype.constructor = ReplaceAroundStep;
 
   ReplaceAroundStep.prototype.apply = function apply (doc) {
@@ -48781,7 +49032,7 @@ var ReplaceAroundStep = (function (Step$$1) {
         typeof json.gapFrom != "number" || typeof json.gapTo != "number" || typeof json.insert != "number")
       { throw new RangeError("Invalid input for ReplaceAroundStep.fromJSON") }
     return new ReplaceAroundStep(json.from, json.to, json.gapFrom, json.gapTo,
-                                 prosemirrorModel.Slice.fromJSON(schema, json.slice), json.insert, !!json.structure)
+                                 prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].fromJSON(schema, json.slice), json.insert, !!json.structure)
   };
 
   return ReplaceAroundStep;
@@ -48841,27 +49092,27 @@ Transform.prototype.lift = function(range, target) {
   var gapStart = $from.before(depth + 1), gapEnd = $to.after(depth + 1);
   var start = gapStart, end = gapEnd;
 
-  var before = prosemirrorModel.Fragment.empty, openStart = 0;
+  var before = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, openStart = 0;
   for (var d = depth, splitting = false; d > target; d--)
     { if (splitting || $from.index(d) > 0) {
       splitting = true;
-      before = prosemirrorModel.Fragment.from($from.node(d).copy(before));
+      before = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from($from.node(d).copy(before));
       openStart++;
     } else {
       start--;
     } }
-  var after = prosemirrorModel.Fragment.empty, openEnd = 0;
+  var after = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, openEnd = 0;
   for (var d$1 = depth, splitting$1 = false; d$1 > target; d$1--)
     { if (splitting$1 || $to.after(d$1 + 1) < $to.end(d$1)) {
       splitting$1 = true;
-      after = prosemirrorModel.Fragment.from($to.node(d$1).copy(after));
+      after = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from($to.node(d$1).copy(after));
       openEnd++;
     } else {
       end++;
     } }
 
   return this.step(new ReplaceAroundStep(start, end, gapStart, gapEnd,
-                                         new prosemirrorModel.Slice(before.append(after), openStart, openEnd),
+                                         new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](before.append(after), openStart, openEnd),
                                          before.size - openStart, true))
 };
 
@@ -48913,12 +49164,12 @@ function findWrappingInside(range, type) {
 // The wrappers are assumed to be valid in this position, and should
 // probably be computed with [`findWrapping`](#transform.findWrapping).
 Transform.prototype.wrap = function(range, wrappers) {
-  var content = prosemirrorModel.Fragment.empty;
+  var content = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty;
   for (var i = wrappers.length - 1; i >= 0; i--)
-    { content = prosemirrorModel.Fragment.from(wrappers[i].type.create(wrappers[i].attrs, content)); }
+    { content = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from(wrappers[i].type.create(wrappers[i].attrs, content)); }
 
   var start = range.start, end = range.end;
-  return this.step(new ReplaceAroundStep(start, end, start, end, new prosemirrorModel.Slice(content, 0, 0), wrappers.length, true))
+  return this.step(new ReplaceAroundStep(start, end, start, end, new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](content, 0, 0), wrappers.length, true))
 };
 
 // :: (number, ?number, NodeType, ?Object) → this
@@ -48937,7 +49188,7 @@ Transform.prototype.setBlockType = function(from, to, type, attrs) {
       var mapping = this$1.mapping.slice(mapFrom);
       var startM = mapping.map(pos, 1), endM = mapping.map(pos + node.nodeSize, 1);
       this$1.step(new ReplaceAroundStep(startM, endM, startM + 1, endM - 1,
-                                      new prosemirrorModel.Slice(prosemirrorModel.Fragment.from(type.create(attrs, null, node.marks)), 0, 0), 1, true));
+                                      new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from(type.create(attrs, null, node.marks)), 0, 0), 1, true));
       return false
     }
   });
@@ -48964,7 +49215,7 @@ Transform.prototype.setNodeMarkup = function(pos, type, attrs, marks) {
     { throw new RangeError("Invalid content for node type " + type.name) }
 
   return this.step(new ReplaceAroundStep(pos, pos + node.nodeSize, pos + 1, pos + node.nodeSize - 1,
-                                         new prosemirrorModel.Slice(prosemirrorModel.Fragment.from(newNode), 0, 0), 1, true))
+                                         new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from(newNode), 0, 0), 1, true))
 };
 
 // :: (Node, number, number, ?[?{type: NodeType, attrs: ?Object}]) → bool
@@ -49001,13 +49252,13 @@ function canSplit(doc, pos, depth, typesAfter) {
 Transform.prototype.split = function(pos, depth, typesAfter) {
   if ( depth === void 0 ) depth = 1;
 
-  var $pos = this.doc.resolve(pos), before = prosemirrorModel.Fragment.empty, after = prosemirrorModel.Fragment.empty;
+  var $pos = this.doc.resolve(pos), before = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, after = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty;
   for (var d = $pos.depth, e = $pos.depth - depth, i = depth - 1; d > e; d--, i--) {
-    before = prosemirrorModel.Fragment.from($pos.node(d).copy(before));
+    before = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from($pos.node(d).copy(before));
     var typeAfter = typesAfter && typesAfter[i];
-    after = prosemirrorModel.Fragment.from(typeAfter ? typeAfter.type.create(typeAfter.attrs, after) : $pos.node(d).copy(after));
+    after = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from(typeAfter ? typeAfter.type.create(typeAfter.attrs, after) : $pos.node(d).copy(after));
   }
-  return this.step(new ReplaceStep(pos, pos, new prosemirrorModel.Slice(before.append(after), depth, depth), true))
+  return this.step(new ReplaceStep(pos, pos, new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](before.append(after), depth, depth), true))
 };
 
 // :: (Node, number) → bool
@@ -49055,7 +49306,7 @@ function joinPoint(doc, pos, dir) {
 Transform.prototype.join = function(pos, depth) {
   if ( depth === void 0 ) depth = 1;
 
-  var step = new ReplaceStep(pos - depth, pos + depth, prosemirrorModel.Slice.empty, true);
+  var step = new ReplaceStep(pos - depth, pos + depth, prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].empty, true);
   return this.step(step)
 };
 
@@ -49113,20 +49364,20 @@ function mapFragment(fragment, f, parent) {
     if (child.isInline) { child = f(child, parent, i); }
     mapped.push(child);
   }
-  return prosemirrorModel.Fragment.fromArray(mapped)
+  return prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].fromArray(mapped)
 }
 
 // ::- Add a mark to all inline content between two positions.
-var AddMarkStep = (function (Step$$1) {
+var AddMarkStep = /*@__PURE__*/(function (Step) {
   function AddMarkStep(from, to, mark) {
-    Step$$1.call(this);
+    Step.call(this);
     this.from = from;
     this.to = to;
     this.mark = mark;
   }
 
-  if ( Step$$1 ) AddMarkStep.__proto__ = Step$$1;
-  AddMarkStep.prototype = Object.create( Step$$1 && Step$$1.prototype );
+  if ( Step ) AddMarkStep.__proto__ = Step;
+  AddMarkStep.prototype = Object.create( Step && Step.prototype );
   AddMarkStep.prototype.constructor = AddMarkStep;
 
   AddMarkStep.prototype.apply = function apply (doc) {
@@ -49134,7 +49385,7 @@ var AddMarkStep = (function (Step$$1) {
 
     var oldSlice = doc.slice(this.from, this.to), $from = doc.resolve(this.from);
     var parent = $from.node($from.sharedDepth(this.to));
-    var slice = new prosemirrorModel.Slice(mapFragment(oldSlice.content, function (node, parent) {
+    var slice = new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](mapFragment(oldSlice.content, function (node, parent) {
       if (!parent.type.allowsMarkType(this$1.mark.type)) { return node }
       return node.mark(this$1.mark.addToSet(node.marks))
     }, parent), oldSlice.openStart, oldSlice.openEnd);
@@ -49176,23 +49427,23 @@ var AddMarkStep = (function (Step$$1) {
 Step.jsonID("addMark", AddMarkStep);
 
 // ::- Remove a mark from all inline content between two positions.
-var RemoveMarkStep = (function (Step$$1) {
+var RemoveMarkStep = /*@__PURE__*/(function (Step) {
   function RemoveMarkStep(from, to, mark) {
-    Step$$1.call(this);
+    Step.call(this);
     this.from = from;
     this.to = to;
     this.mark = mark;
   }
 
-  if ( Step$$1 ) RemoveMarkStep.__proto__ = Step$$1;
-  RemoveMarkStep.prototype = Object.create( Step$$1 && Step$$1.prototype );
+  if ( Step ) RemoveMarkStep.__proto__ = Step;
+  RemoveMarkStep.prototype = Object.create( Step && Step.prototype );
   RemoveMarkStep.prototype.constructor = RemoveMarkStep;
 
   RemoveMarkStep.prototype.apply = function apply (doc) {
     var this$1 = this;
 
     var oldSlice = doc.slice(this.from, this.to);
-    var slice = new prosemirrorModel.Slice(mapFragment(oldSlice.content, function (node) {
+    var slice = new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](mapFragment(oldSlice.content, function (node) {
       return node.mark(this$1.mark.removeFromSet(node.marks))
     }), oldSlice.openStart, oldSlice.openEnd);
     return StepResult.fromReplace(doc, this.from, this.to, slice)
@@ -49280,7 +49531,7 @@ Transform.prototype.removeMark = function(from, to, mark) {
     if (!node.isInline) { return }
     step++;
     var toRemove = null;
-    if (mark instanceof prosemirrorModel.MarkType) {
+    if (mark instanceof prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["MarkType"]) {
       var found = mark.isInSet(node.marks);
       if (found) { toRemove = [found]; }
     } else if (mark) {
@@ -49315,7 +49566,6 @@ Transform.prototype.removeMark = function(from, to, mark) {
 // optional starting [content match](#model.ContentMatch) as third
 // argument.
 Transform.prototype.clearIncompatible = function(pos, parentType, match) {
-  var this$1 = this;
   if ( match === void 0 ) match = parentType.contentMatch;
 
   var node = this.doc.nodeAt(pos);
@@ -49324,19 +49574,19 @@ Transform.prototype.clearIncompatible = function(pos, parentType, match) {
     var child = node.child(i), end = cur + child.nodeSize;
     var allowed = match.matchType(child.type, child.attrs);
     if (!allowed) {
-      delSteps.push(new ReplaceStep(cur, end, prosemirrorModel.Slice.empty));
+      delSteps.push(new ReplaceStep(cur, end, prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].empty));
     } else {
       match = allowed;
       for (var j = 0; j < child.marks.length; j++) { if (!parentType.allowsMarkType(child.marks[j].type))
-        { this$1.step(new RemoveMarkStep(cur, end, child.marks[j])); } }
+        { this.step(new RemoveMarkStep(cur, end, child.marks[j])); } }
     }
     cur = end;
   }
   if (!match.validEnd) {
-    var fill = match.fillBefore(prosemirrorModel.Fragment.empty, true);
-    this.replace(cur, cur, new prosemirrorModel.Slice(fill, 0, 0));
+    var fill = match.fillBefore(prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, true);
+    this.replace(cur, cur, new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](fill, 0, 0));
   }
-  for (var i$1 = delSteps.length - 1; i$1 >= 0; i$1--) { this$1.step(delSteps[i$1]); }
+  for (var i$1 = delSteps.length - 1; i$1 >= 0; i$1--) { this.step(delSteps[i$1]); }
   return this
 };
 
@@ -49347,7 +49597,7 @@ Transform.prototype.clearIncompatible = function(pos, parentType, match) {
 // would be a no-op (an empty slice over an empty range).
 function replaceStep(doc, from, to, slice) {
   if ( to === void 0 ) to = from;
-  if ( slice === void 0 ) slice = prosemirrorModel.Slice.empty;
+  if ( slice === void 0 ) slice = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].empty;
 
   if (from == to && !slice.size) { return null }
 
@@ -49374,7 +49624,7 @@ function replaceStep(doc, from, to, slice) {
 // given `slice`.
 Transform.prototype.replace = function(from, to, slice) {
   if ( to === void 0 ) to = from;
-  if ( slice === void 0 ) slice = prosemirrorModel.Slice.empty;
+  if ( slice === void 0 ) slice = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].empty;
 
   var step = replaceStep(this.doc, from, to, slice);
   if (step) { this.step(step); }
@@ -49385,13 +49635,13 @@ Transform.prototype.replace = function(from, to, slice) {
 // Replace the given range with the given content, which may be a
 // fragment, node, or array of nodes.
 Transform.prototype.replaceWith = function(from, to, content) {
-  return this.replace(from, to, new prosemirrorModel.Slice(prosemirrorModel.Fragment.from(content), 0, 0))
+  return this.replace(from, to, new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from(content), 0, 0))
 };
 
 // :: (number, number) → this
 // Delete the content between the given positions.
 Transform.prototype.delete = function(from, to) {
-  return this.replace(from, to, prosemirrorModel.Slice.empty)
+  return this.replace(from, to, prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].empty)
 };
 
 // :: (number, union<Fragment, Node, [Node]>) → this
@@ -49403,11 +49653,11 @@ Transform.prototype.insert = function(pos, content) {
 
 
 function fitLeftInner($from, depth, placed, placedBelow) {
-  var content = prosemirrorModel.Fragment.empty, openEnd = 0, placedHere = placed[depth];
+  var content = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, openEnd = 0, placedHere = placed[depth];
   if ($from.depth > depth) {
     var inner = fitLeftInner($from, depth + 1, placed, placedBelow || placedHere);
     openEnd = inner.openEnd + 1;
-    content = prosemirrorModel.Fragment.from($from.node(depth + 1).copy(inner.content));
+    content = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from($from.node(depth + 1).copy(inner.content));
   }
 
   if (placedHere) {
@@ -49415,7 +49665,7 @@ function fitLeftInner($from, depth, placed, placedBelow) {
     openEnd = placedHere.openEnd;
   }
   if (placedBelow) {
-    content = content.append($from.node(depth).contentMatchAt($from.indexAfter(depth)).fillBefore(prosemirrorModel.Fragment.empty, true));
+    content = content.append($from.node(depth).contentMatchAt($from.indexAfter(depth)).fillBefore(prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, true));
     openEnd = 0;
   }
 
@@ -49426,7 +49676,7 @@ function fitLeft($from, placed) {
   var ref = fitLeftInner($from, 0, placed, false);
   var content = ref.content;
   var openEnd = ref.openEnd;
-  return new prosemirrorModel.Slice(content, $from.depth, openEnd || 0)
+  return new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](content, $from.depth, openEnd || 0)
 }
 
 function fitRightJoin(content, parent, $from, $to, depth, openStart, openEnd) {
@@ -49496,7 +49746,7 @@ function fitRightClosed(node, openEnd, $from, depth, openStart) {
     content = content.replaceChild(count - 1, closed);
   }
 
-  return node.copy(content.append(match.fillBefore(prosemirrorModel.Fragment.empty, true)))
+  return node.copy(content.append(match.fillBefore(prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, true)))
 }
 
 function fitRightSeparate($to, depth) {
@@ -49512,7 +49762,7 @@ function normalizeSlice(content, openStart, openEnd) {
     openStart--;
     openEnd--;
   }
-  return new prosemirrorModel.Slice(content, openStart, openEnd)
+  return new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](content, openStart, openEnd)
 }
 
 // : (ResolvedPos, ResolvedPos, number, Slice) → Slice
@@ -49581,13 +49831,11 @@ function placeSlice($from, slice) {
 // keeping track of the content match and already inserted content
 // at each depth.
 var Frontier = function Frontier($pos) {
-  var this$1 = this;
-
   // : [{parent: Node, match: ContentMatch, content: Fragment, wrapper: bool, openEnd: number, depth: number}]
   this.open = [];
   for (var d = 0; d <= $pos.depth; d++) {
     var parent = $pos.node(d), match = parent.contentMatchAt($pos.indexAfter(d));
-    this$1.open.push({parent: parent, match: match, content: prosemirrorModel.Fragment.empty, wrapper: false, openEnd: 0, depth: d});
+    this.open.push({parent: parent, match: match, content: prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, wrapper: false, openEnd: 0, depth: d});
   }
   this.placed = [];
 };
@@ -49620,46 +49868,44 @@ Frontier.prototype.placeSlice = function placeSlice (fragment, openStart, openEn
   if (pass > 2 && result.size && openStart == 0) {
     var child = result.content.firstChild, single = result.content.childCount == 1;
     this.placeContent(child.content, 0, openEnd && single ? openEnd - 1 : 0, pass, child);
-    result = single ? prosemirrorModel.Fragment.empty : new prosemirrorModel.Slice(result.content.cutByIndex(1), 0, openEnd);
+    result = single ? prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty : new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](result.content.cutByIndex(1), 0, openEnd);
   }
   return result
 };
 
 Frontier.prototype.placeContent = function placeContent (fragment, openStart, openEnd, pass, parent) {
-    var this$1 = this;
-
   var i = 0;
   // Go over the fragment's children
   for (; i < fragment.childCount; i++) {
     var child = fragment.child(i), placed = false, last = i == fragment.childCount - 1;
     // Try each open node in turn, starting from the innermost
     for (var d = this.open.length - 1; d >= 0; d--) {
-      var open = this$1.open[d], wrap = (void 0);
+      var open = this.open[d], wrap = (void 0);
 
       // If pass > 1, it is allowed to wrap the node to help find a
       // fit, so if findWrapping returns something, we add open
       // nodes to the frontier for that wrapping.
       if (pass > 1 && (wrap = open.match.findWrapping(child.type)) &&
           !(parent && wrap.length && wrap[wrap.length - 1] == parent.type)) {
-        while (this.open.length - 1 > d) { this$1.closeNode(); }
+        while (this.open.length - 1 > d) { this.closeNode(); }
         for (var w = 0; w < wrap.length; w++) {
           open.match = open.match.matchType(wrap[w]);
           d++;
           open = {parent: wrap[w].create(),
                   match: wrap[w].contentMatch,
-                  content: prosemirrorModel.Fragment.empty, wrapper: true, openEnd: 0, depth: d + w};
-          this$1.open.push(open);
+                  content: prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, wrapper: true, openEnd: 0, depth: d + w};
+          this.open.push(open);
         }
       }
 
       // See if the child fits here
       var match = open.match.matchType(child.type);
       if (!match) {
-        var fill = open.match.fillBefore(prosemirrorModel.Fragment.from(child));
+        var fill = open.match.fillBefore(prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from(child));
         if (fill) {
           for (var j = 0; j < fill.childCount; j++) {
             var ch = fill.child(j);
-            this$1.addNode(open, ch, 0);
+            this.addNode(open, ch, 0);
             match = open.match.matchFragment(ch);
           }
         } else if (parent && open.match.matchType(parent.type)) {
@@ -49673,7 +49919,7 @@ Frontier.prototype.placeContent = function placeContent (fragment, openStart, op
 
       // Close open nodes above this one, since we're starting to
       // add to this.
-      while (this.open.length - 1 > d) { this$1.closeNode(); }
+      while (this.open.length - 1 > d) { this.closeNode(); }
       // Strip marks from the child or close its start when necessary
       child = child.mark(open.parent.type.allowedMarks(child.marks));
       if (openStart) {
@@ -49681,7 +49927,7 @@ Frontier.prototype.placeContent = function placeContent (fragment, openStart, op
         openStart = 0;
       }
       // Add the child to this open node and adjust its metadata
-      this$1.addNode(open, child, last ? openEnd : 0);
+      this.addNode(open, child, last ? openEnd : 0);
       open.match = match;
       if (last) { openEnd = 0; }
       placed = true;
@@ -49699,7 +49945,7 @@ Frontier.prototype.placeContent = function placeContent (fragment, openStart, op
        parent && this.open[this.open.length - 1].parent.type == parent.type))
     { this.closeNode(); }
 
-  return new prosemirrorModel.Slice(fragment.cutByIndex(i), openStart, openEnd)
+  return new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](fragment.cutByIndex(i), openStart, openEnd)
 };
 
 Frontier.prototype.addNode = function addNode (open, node, openEnd) {
@@ -49709,9 +49955,7 @@ Frontier.prototype.addNode = function addNode (open, node, openEnd) {
 
 Frontier.prototype.closeNode = function closeNode () {
   var open = this.open.pop();
-  if (open.content.size == 0) {
-    // Nothing here
-  } else if (open.wrapper) {
+  if (open.content.size == 0) ; else if (open.wrapper) {
     this.addNode(this.open[this.open.length - 1], open.parent.copy(open.content), open.openEnd + 1);
   } else {
     this.placed[open.depth] = {depth: open.depth, content: open.content, openEnd: open.openEnd};
@@ -49734,7 +49978,7 @@ function closeNodeEnd(node, depth) {
     var last = closeNodeEnd(node.lastChild, depth - 1);
     content = node.content.replaceChild(node.childCount - 1, last);
   }
-  var fill = node.contentMatchAt(node.childCount).fillBefore(prosemirrorModel.Fragment.empty, true);
+  var fill = node.contentMatchAt(node.childCount).fillBefore(prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, true);
   return node.copy(content.append(fill))
 }
 
@@ -49759,8 +50003,6 @@ function closeFragmentEnd(fragment, depth) {
 // range, and is useful in situations where you need more precise
 // control over what happens.
 Transform.prototype.replaceRange = function(from, to, slice) {
-  var this$1 = this;
-
   if (!slice.size) { return this.deleteRange(from, to) }
 
   var $from = this.doc.resolve(from), $to = this.doc.resolve(to);
@@ -49815,16 +50057,16 @@ Transform.prototype.replaceRange = function(from, to, slice) {
       if (targetDepth < 0) { expand = false; targetDepth = -targetDepth; }
       var parent = $from.node(targetDepth - 1), index = $from.index(targetDepth - 1);
       if (parent.canReplaceWith(index, index, insert.type, insert.marks))
-        { return this$1.replace($from.before(targetDepth), expand ? $to.after(targetDepth) : to,
-                            new prosemirrorModel.Slice(closeFragment(slice.content, 0, slice.openStart, openDepth),
+        { return this.replace($from.before(targetDepth), expand ? $to.after(targetDepth) : to,
+                            new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](closeFragment(slice.content, 0, slice.openStart, openDepth),
                                       openDepth, slice.openEnd)) }
     }
   }
 
   var startSteps = this.steps.length;
   for (var i$2 = targetDepths.length - 1; i$2 >= 0; i$2--) {
-    this$1.replace(from, to, slice);
-    if (this$1.steps.length > startSteps) { break }
+    this.replace(from, to, slice);
+    if (this.steps.length > startSteps) { break }
     var depth = targetDepths[i$2];
     if (i$2 < 0) { continue }
     from = $from.before(depth); to = $to.after(depth);
@@ -49840,7 +50082,7 @@ function closeFragment(fragment, depth, oldOpen, newOpen, parent) {
   if (depth > newOpen) {
     var match = parent.contentMatchAt(0);
     var start = match.fillBefore(fragment).append(fragment);
-    fragment = start.append(match.matchFragment(start).fillBefore(prosemirrorModel.Fragment.empty, true));
+    fragment = start.append(match.matchFragment(start).fillBefore(prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, true));
   }
   return fragment
 }
@@ -49858,27 +50100,25 @@ Transform.prototype.replaceRangeWith = function(from, to, node) {
     var point = insertPoint(this.doc, from, node.type);
     if (point != null) { from = to = point; }
   }
-  return this.replaceRange(from, to, new prosemirrorModel.Slice(prosemirrorModel.Fragment.from(node), 0, 0))
+  return this.replaceRange(from, to, new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from(node), 0, 0))
 };
 
 // :: (number, number) → this
 // Delete the given range, expanding it to cover fully covered
 // parent nodes until a valid replace is found.
 Transform.prototype.deleteRange = function(from, to) {
-  var this$1 = this;
-
   var $from = this.doc.resolve(from), $to = this.doc.resolve(to);
   var covered = coveredDepths($from, $to);
   for (var i = 0; i < covered.length; i++) {
     var depth = covered[i], last = i == covered.length - 1;
     if ((last && depth == 0) || $from.node(depth).type.contentMatch.validEnd)
-      { return this$1.delete($from.start(depth), $to.end(depth)) }
+      { return this.delete($from.start(depth), $to.end(depth)) }
     if (depth > 0 && (last || $from.node(depth - 1).canReplace($from.index(depth - 1), $to.indexAfter(depth - 1))))
-      { return this$1.delete($from.before(depth), $to.after(depth)) }
+      { return this.delete($from.before(depth), $to.after(depth)) }
   }
-  for (var d = 1; d <= $from.depth; d++) {
-    if (from - $from.start(d) == $from.depth - d && to > $from.end(d))
-      { return this$1.delete($from.before(d), to) }
+  for (var d = 1; d <= $from.depth && d <= $to.depth; d++) {
+    if (from - $from.start(d) == $from.depth - d && to > $from.end(d) && $to.end(d) - to != $to.depth - d)
+      { return this.delete($from.before(d), to) }
   }
   return this.delete(from, to)
 };
@@ -49899,26 +50139,8 @@ function coveredDepths($from, $to) {
   return result
 }
 
-exports.Transform = Transform;
-exports.TransformError = TransformError;
-exports.Step = Step;
-exports.StepResult = StepResult;
-exports.joinPoint = joinPoint;
-exports.canJoin = canJoin;
-exports.canSplit = canSplit;
-exports.insertPoint = insertPoint;
-exports.dropPoint = dropPoint;
-exports.liftTarget = liftTarget;
-exports.findWrapping = findWrapping;
-exports.StepMap = StepMap;
-exports.MapResult = MapResult;
-exports.Mapping = Mapping;
-exports.AddMarkStep = AddMarkStep;
-exports.RemoveMarkStep = RemoveMarkStep;
-exports.ReplaceStep = ReplaceStep;
-exports.ReplaceAroundStep = ReplaceAroundStep;
-exports.replaceStep = replaceStep;
-//# sourceMappingURL=index.js.map
+
+//# sourceMappingURL=index.es.js.map
 
 
 /***/ }),
@@ -49935,9 +50157,9 @@ exports.replaceStep = replaceStep;
 
 Object.defineProperty(exports, '__esModule', { value: true });
 
-var prosemirrorState = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.js");
-var prosemirrorModel = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.js");
-var prosemirrorTables = __webpack_require__(/*! prosemirror-tables */ "./node_modules/prosemirror-tables/dist/index.js");
+var prosemirrorState = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.es.js");
+var prosemirrorModel = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.es.js");
+var prosemirrorTables = __webpack_require__(/*! prosemirror-tables */ "./node_modules/prosemirror-tables/dist/index.es.js");
 
 // :: (nodeType: union<NodeType, [NodeType]>) → (tr: Transaction) → Transaction
 // Returns a new transaction that removes a node of a given `nodeType`. It will return an original transaction if parent node hasn't been found.
@@ -52204,23 +52426,30 @@ exports.removeNodeBefore = removeNodeBefore;
 
 /***/ }),
 
-/***/ "./node_modules/prosemirror-view/dist/index.js":
-/*!*****************************************************!*\
-  !*** ./node_modules/prosemirror-view/dist/index.js ***!
-  \*****************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
+/***/ "./node_modules/prosemirror-view/dist/index.es.js":
+/*!********************************************************!*\
+  !*** ./node_modules/prosemirror-view/dist/index.es.js ***!
+  \********************************************************/
+/*! exports provided: Decoration, DecorationSet, EditorView, __endComposition, __parseFromClipboard, __serializeForClipboard */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Decoration", function() { return Decoration; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "DecorationSet", function() { return DecorationSet; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "EditorView", function() { return EditorView; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "__endComposition", function() { return endComposition; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "__parseFromClipboard", function() { return parseFromClipboard; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "__serializeForClipboard", function() { return serializeForClipboard; });
+/* harmony import */ var prosemirror_state__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.es.js");
+/* harmony import */ var prosemirror_model__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.es.js");
+/* harmony import */ var prosemirror_transform__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! prosemirror-transform */ "./node_modules/prosemirror-transform/dist/index.es.js");
 
 
-Object.defineProperty(exports, '__esModule', { value: true });
 
-var prosemirrorState = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.js");
-var prosemirrorModel = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.js");
-var prosemirrorTransform = __webpack_require__(/*! prosemirror-transform */ "./node_modules/prosemirror-transform/dist/index.js");
 
 var result = {};
+
 if (typeof navigator != "undefined" && typeof document != "undefined") {
   var ie_edge = /Edge\/(\d+)/.exec(navigator.userAgent);
   var ie_upto10 = /MSIE \d/.test(navigator.userAgent);
@@ -52359,7 +52588,6 @@ function scrollRectIntoView(view, rect, startDOM) {
 // when the size of the content above changes.
 function storeScrollPos(view) {
   var rect = view.dom.getBoundingClientRect(), startY = Math.max(0, rect.top);
-  var doc = view.dom.ownerDocument;
   var refDOM, refTop;
   for (var x = (rect.left + rect.right) / 2, y = startY + 1;
        y < Math.min(innerHeight, rect.bottom); y += 5) {
@@ -52372,12 +52600,16 @@ function storeScrollPos(view) {
       break
     }
   }
-  var stack = [];
-  for (var dom$1 = view.dom; dom$1; dom$1 = parentNode(dom$1)) {
-    stack.push({dom: dom$1, top: dom$1.scrollTop, left: dom$1.scrollLeft});
-    if (dom$1 == doc.body) { break }
+  return {refDOM: refDOM, refTop: refTop, stack: scrollStack(view.dom)}
+}
+
+function scrollStack(dom) {
+  var stack = [], doc = dom.ownerDocument;
+  for (; dom; dom = parentNode(dom)) {
+    stack.push({dom: dom, top: dom.scrollTop, left: dom.scrollLeft});
+    if (dom == doc) { break }
   }
-  return {refDOM: refDOM, refTop: refTop, stack: stack}
+  return stack
 }
 
 // Reset the scroll position of the editor's parent nodes to that what
@@ -52388,14 +52620,37 @@ function resetScrollPos(ref) {
   var stack = ref.stack;
 
   var newRefTop = refDOM ? refDOM.getBoundingClientRect().top : 0;
-  var dTop = newRefTop == 0 ? 0 : newRefTop - refTop;
+  restoreScrollStack(stack, newRefTop == 0 ? 0 : newRefTop - refTop);
+}
+
+function restoreScrollStack(stack, dTop) {
   for (var i = 0; i < stack.length; i++) {
-    var ref$1 = stack[i];
-    var dom = ref$1.dom;
-    var top = ref$1.top;
-    var left = ref$1.left;
+    var ref = stack[i];
+    var dom = ref.dom;
+    var top = ref.top;
+    var left = ref.left;
     if (dom.scrollTop != top + dTop) { dom.scrollTop = top + dTop; }
     if (dom.scrollLeft != left) { dom.scrollLeft = left; }
+  }
+}
+
+var preventScrollSupported = null;
+// Feature-detects support for .focus({preventScroll: true}), and uses
+// a fallback kludge when not supported.
+function focusPreventScroll(dom) {
+  if (dom.setActive) { return dom.setActive() } // in IE
+  if (preventScrollSupported) { return dom.focus(preventScrollSupported) }
+
+  var stored = scrollStack(dom);
+  dom.focus(preventScrollSupported == null ? {
+    get preventScroll() {
+      preventScrollSupported = {preventScroll: true};
+      return true
+    }
+  } : undefined);
+  if (!preventScrollSupported) {
+    preventScrollSupported = false;
+    restoreScrollStack(stored, 0);
   }
 }
 
@@ -52515,16 +52770,18 @@ function elementFromPoint(element, coords, box) {
 
 // Given an x,y position on the editor, get the position in the document.
 function posAtCoords(view, coords) {
+  var assign, assign$1;
+
   var root = view.root, node, offset;
   if (root.caretPositionFromPoint) {
-    var pos$1 = root.caretPositionFromPoint(coords.left, coords.top);
-    if (pos$1) { var assign;
-      ((assign = pos$1, node = assign.offsetNode, offset = assign.offset)); }
+    try { // Firefox throws for this call in hard-to-predict circumstances (#994)
+      var pos$1 = root.caretPositionFromPoint(coords.left, coords.top);
+      if (pos$1) { ((assign = pos$1, node = assign.offsetNode, offset = assign.offset)); }
+    } catch (_) {}
   }
   if (!node && root.caretRangeFromPoint) {
     var range = root.caretRangeFromPoint(coords.left, coords.top);
-    if (range) { var assign$1;
-      ((assign$1 = range, node = assign$1.startContainer, offset = assign$1.startOffset)); }
+    if (range) { ((assign$1 = range, node = assign$1.startContainer, offset = assign$1.startOffset)); }
   }
 
   var elt = root.elementFromPoint(coords.left, coords.top + 1), pos;
@@ -52716,19 +52973,17 @@ function endOfTextblockHorizontal(view, state, dir) {
     var oldBidiLevel = sel.caretBidiLevel; // Only for Firefox
     sel.modify("move", dir, "character");
     var parentDOM = $head.depth ? view.docView.domAfterPos($head.before()) : view.dom;
-    var result$$1 = !parentDOM.contains(sel.focusNode.nodeType == 1 ? sel.focusNode : sel.focusNode.parentNode) ||
+    var result = !parentDOM.contains(sel.focusNode.nodeType == 1 ? sel.focusNode : sel.focusNode.parentNode) ||
         (oldNode == sel.focusNode && oldOff == sel.focusOffset);
     // Restore the previous selection
     sel.removeAllRanges();
     sel.addRange(oldRange);
     if (oldBidiLevel != null) { sel.caretBidiLevel = oldBidiLevel; }
-    return result$$1
+    return result
   })
 }
 
-var cachedState = null;
-var cachedDir = null;
-var cachedResult = false;
+var cachedState = null, cachedDir = null, cachedResult = false;
 function endOfTextblock(view, state, dir) {
   if (cachedState == state && cachedDir == dir) { return cachedResult }
   cachedState = state; cachedDir = dir;
@@ -52817,10 +53072,7 @@ function endOfTextblock(view, state, dir) {
 //
 // They form a doubly-linked mutable tree, starting at `view.docView`.
 
-var NOT_DIRTY = 0;
-var CHILD_DIRTY = 1;
-var CONTENT_DIRTY = 2;
-var NODE_DIRTY = 3;
+var NOT_DIRTY = 0, CHILD_DIRTY = 1, CONTENT_DIRTY = 2, NODE_DIRTY = 3;
 
 // Superclass for the various kinds of descriptions. Defines their
 // basic structure and shared methods.
@@ -52837,7 +53089,7 @@ var ViewDesc = function ViewDesc(parent, children, dom, contentDOM) {
   this.dirty = NOT_DIRTY;
 };
 
-var prototypeAccessors$1 = { beforePosition: {},size: {},border: {},posBefore: {},posAtStart: {},posAfter: {},posAtEnd: {},contentLost: {} };
+var prototypeAccessors = { beforePosition: { configurable: true },size: { configurable: true },border: { configurable: true },posBefore: { configurable: true },posAtStart: { configurable: true },posAfter: { configurable: true },posAtEnd: { configurable: true },contentLost: { configurable: true } };
 
 // Used to check whether a given description corresponds to a
 // widget/mark/node.
@@ -52846,7 +53098,7 @@ ViewDesc.prototype.matchesMark = function matchesMark () { return false };
 ViewDesc.prototype.matchesNode = function matchesNode () { return false };
 ViewDesc.prototype.matchesHack = function matchesHack () { return false };
 
-prototypeAccessors$1.beforePosition.get = function () { return false };
+prototypeAccessors.beforePosition.get = function () { return false };
 
 // : () → ?ParseRule
 // When parsing in-editor content (in domchange.js), we allow
@@ -52860,57 +53112,49 @@ ViewDesc.prototype.parseRule = function parseRule () { return null };
 ViewDesc.prototype.stopEvent = function stopEvent () { return false };
 
 // The size of the content represented by this desc.
-prototypeAccessors$1.size.get = function () {
-    var this$1 = this;
-
+prototypeAccessors.size.get = function () {
   var size = 0;
-  for (var i = 0; i < this.children.length; i++) { size += this$1.children[i].size; }
+  for (var i = 0; i < this.children.length; i++) { size += this.children[i].size; }
   return size
 };
 
 // For block nodes, this represents the space taken up by their
 // start/end tokens.
-prototypeAccessors$1.border.get = function () { return 0 };
+prototypeAccessors.border.get = function () { return 0 };
 
 ViewDesc.prototype.destroy = function destroy () {
-    var this$1 = this;
-
   this.parent = null;
   if (this.dom.pmViewDesc == this) { this.dom.pmViewDesc = null; }
   for (var i = 0; i < this.children.length; i++)
-    { this$1.children[i].destroy(); }
+    { this.children[i].destroy(); }
 };
 
 ViewDesc.prototype.posBeforeChild = function posBeforeChild (child) {
-    var this$1 = this;
-
   for (var i = 0, pos = this.posAtStart; i < this.children.length; i++) {
-    var cur = this$1.children[i];
+    var cur = this.children[i];
     if (cur == child) { return pos }
     pos += cur.size;
   }
 };
 
-prototypeAccessors$1.posBefore.get = function () {
+prototypeAccessors.posBefore.get = function () {
   return this.parent.posBeforeChild(this)
 };
 
-prototypeAccessors$1.posAtStart.get = function () {
+prototypeAccessors.posAtStart.get = function () {
   return this.parent ? this.parent.posBeforeChild(this) + this.border : 0
 };
 
-prototypeAccessors$1.posAfter.get = function () {
+prototypeAccessors.posAfter.get = function () {
   return this.posBefore + this.size
 };
 
-prototypeAccessors$1.posAtEnd.get = function () {
+prototypeAccessors.posAtEnd.get = function () {
   return this.posAtStart + this.size - 2 * this.border
 };
 
 // : (dom.Node, number, ?number) → number
 ViewDesc.prototype.localPosFromDOM = function localPosFromDOM (dom, offset, bias) {
-    var this$1 = this;
-
   // If the DOM position is in the content, use the child desc after
   // it to figure out a position.
   if (this.contentDOM && this.contentDOM.contains(dom.nodeType == 1 ? dom : dom.parentNode)) {
@@ -52944,11 +53188,11 @@ ViewDesc.prototype.localPosFromDOM = function localPosFromDOM (dom, offset, bias
     atEnd = dom.compareDocumentPosition(this.contentDOM) & 2;
   } else if (this.dom.firstChild) {
     if (offset == 0) { for (var search = dom;; search = search.parentNode) {
-      if (search == this$1.dom) { atEnd = false; break }
+      if (search == this.dom) { atEnd = false; break }
       if (search.parentNode.firstChild != search) { break }
     } }
     if (atEnd == null && offset == dom.childNodes.length) { for (var search$1 = dom;; search$1 = search$1.parentNode) {
-      if (search$1 == this$1.dom) { atEnd = true; break }
+      if (search$1 == this.dom) { atEnd = true; break }
       if (search$1.parentNode.lastChild != search$1) { break }
     } }
   }
@@ -52958,10 +53202,8 @@ ViewDesc.prototype.localPosFromDOM = function localPosFromDOM (dom, offset, bias
 // Scan up the dom finding the first desc that is a descendant of
 // this one.
 ViewDesc.prototype.nearestDesc = function nearestDesc (dom, onlyNodes) {
-    var this$1 = this;
-
   for (var first = true, cur = dom; cur; cur = cur.parentNode) {
-    var desc = this$1.getDesc(cur);
+    var desc = this.getDesc(cur);
     if (desc && (!onlyNodes || desc.node)) {
       // If dom is outside of this desc's nodeDOM, don't count it.
       if (first && desc.nodeDOM && !(desc.nodeDOM.nodeType == 1 ? desc.nodeDOM.contains(dom) : desc.nodeDOM == dom)) { first = false; }
@@ -52971,17 +53213,13 @@ ViewDesc.prototype.nearestDesc = function nearestDesc (dom, onlyNodes) {
 };
 
 ViewDesc.prototype.getDesc = function getDesc (dom) {
-    var this$1 = this;
-
   var desc = dom.pmViewDesc;
-  for (var cur = desc; cur; cur = cur.parent) { if (cur == this$1) { return desc } }
+  for (var cur = desc; cur; cur = cur.parent) { if (cur == this) { return desc } }
 };
 
 ViewDesc.prototype.posFromDOM = function posFromDOM (dom, offset, bias) {
-    var this$1 = this;
-
   for (var scan = dom;; scan = scan.parentNode) {
-    var desc = this$1.getDesc(scan);
+    var desc = this.getDesc(scan);
     if (desc) { return desc.localPosFromDOM(dom, offset, bias) }
   }
 };
@@ -52990,10 +53228,8 @@ ViewDesc.prototype.posFromDOM = function posFromDOM (dom, offset, bias) {
 // Find the desc for the node after the given pos, if any. (When a
 // parent node overrode rendering, there might not be one.)
 ViewDesc.prototype.descAt = function descAt (pos) {
-    var this$1 = this;
-
   for (var i = 0, offset = 0; i < this.children.length; i++) {
-    var child = this$1.children[i], end = offset + child.size;
+    var child = this.children[i], end = offset + child.size;
     if (offset == pos && end != offset) {
       while (!child.border && child.children.length) { child = child.children[0]; }
       return child
@@ -53005,17 +53241,15 @@ ViewDesc.prototype.descAt = function descAt (pos) {
 
 // : (number) → {node: dom.Node, offset: number}
 ViewDesc.prototype.domFromPos = function domFromPos (pos) {
-    var this$1 = this;
-
   if (!this.contentDOM) { return {node: this.dom, offset: 0} }
   for (var offset = 0, i = 0;; i++) {
     if (offset == pos) {
       while (i < this.children.length && (this.children[i].beforePosition || this.children[i].dom.parentNode != this.contentDOM)) { i++; }
-      return {node: this$1.contentDOM,
-              offset: i == this$1.children.length ? this$1.contentDOM.childNodes.length : domIndex(this$1.children[i].dom)}
+      return {node: this.contentDOM,
+              offset: i == this.children.length ? this.contentDOM.childNodes.length : domIndex(this.children[i].dom)}
     }
-    if (i == this$1.children.length) { throw new Error("Invalid position " + pos) }
-    var child = this$1.children[i], end = offset + child.size;
+    if (i == this.children.length) { throw new Error("Invalid position " + pos) }
+    var child = this.children[i], end = offset + child.size;
     if (pos < end) { return child.domFromPos(pos - offset - child.border) }
     offset = end;
   }
@@ -53024,7 +53258,6 @@ ViewDesc.prototype.domFromPos = function domFromPos (pos) {
 // Used to find a DOM range in a single parent for a given changed
 // range.
 ViewDesc.prototype.parseRange = function parseRange (from, to, base) {
-    var this$1 = this;
     if ( base === void 0 ) base = 0;
 
   if (this.children.length == 0)
@@ -53032,18 +53265,18 @@ ViewDesc.prototype.parseRange = function parseRange (from, to, base) {
 
   var fromOffset = -1, toOffset = -1;
   for (var offset = base, i = 0;; i++) {
-    var child = this$1.children[i], end = offset + child.size;
+    var child = this.children[i], end = offset + child.size;
     if (fromOffset == -1 && from <= end) {
       var childBase = offset + child.border;
       // FIXME maybe descend mark views to parse a narrower range?
       if (from >= childBase && to <= end - child.border && child.node &&
-          child.contentDOM && this$1.contentDOM.contains(child.contentDOM))
+          child.contentDOM && this.contentDOM.contains(child.contentDOM))
         { return child.parseRange(from, to, childBase) }
 
       from = offset;
       for (var j = i; j > 0; j--) {
-        var prev = this$1.children[j - 1];
-        if (prev.size && prev.dom.parentNode == this$1.contentDOM && !prev.emptyChildAt(1)) {
+        var prev = this.children[j - 1];
+        if (prev.size && prev.dom.parentNode == this.contentDOM && !prev.emptyChildAt(1)) {
           fromOffset = domIndex(prev.dom) + 1;
           break
         }
@@ -53054,14 +53287,14 @@ ViewDesc.prototype.parseRange = function parseRange (from, to, base) {
     if (fromOffset > -1 && to <= end) {
       to = end;
       for (var j$1 = i + 1; j$1 < this.children.length; j$1++) {
-        var next = this$1.children[j$1];
-        if (next.size && next.dom.parentNode == this$1.contentDOM && !next.emptyChildAt(-1)) {
+        var next = this.children[j$1];
+        if (next.size && next.dom.parentNode == this.contentDOM && !next.emptyChildAt(-1)) {
           toOffset = domIndex(next.dom);
           break
         }
         to += next.size;
       }
-      if (toOffset == -1) { toOffset = this$1.contentDOM.childNodes.length; }
+      if (toOffset == -1) { toOffset = this.contentDOM.childNodes.length; }
       break
     }
     offset = end;
@@ -53092,12 +53325,10 @@ ViewDesc.prototype.domAfterPos = function domAfterPos (pos) {
 // a selection starts in such a node and ends in another, in which
 // case we just use whatever domFromPos produces as a best effort.
 ViewDesc.prototype.setSelection = function setSelection (anchor, head, root, force) {
-    var this$1 = this;
-
   // If the selection falls entirely in a child, give it to that child
   var from = Math.min(anchor, head), to = Math.max(anchor, head);
   for (var i = 0, offset = 0; i < this.children.length; i++) {
-    var child = this$1.children[i], end = offset + child.size;
+    var child = this.children[i], end = offset + child.size;
     if (from > offset && to < end)
       { return child.setSelection(anchor - offset - child.border, head - offset - child.border, root, force) }
     offset = end;
@@ -53132,23 +53363,21 @@ ViewDesc.prototype.ignoreMutation = function ignoreMutation (_mutation) {
   return !this.contentDOM
 };
 
-prototypeAccessors$1.contentLost.get = function () {
+prototypeAccessors.contentLost.get = function () {
   return this.contentDOM && this.contentDOM != this.dom && !this.dom.contains(this.contentDOM)
 };
 
 // Remove a subtree of the element tree that has been touched
 // by a DOM change, so that the next update will redraw it.
 ViewDesc.prototype.markDirty = function markDirty (from, to) {
-    var this$1 = this;
-
   for (var offset = 0, i = 0; i < this.children.length; i++) {
-    var child = this$1.children[i], end = offset + child.size;
+    var child = this.children[i], end = offset + child.size;
     if (offset == end ? from <= end && to >= offset : from < end && to > offset) {
       var startInside = offset + child.border, endInside = end - child.border;
       if (from >= startInside && to <= endInside) {
-        this$1.dirty = from == offset || to == end ? CONTENT_DIRTY : CHILD_DIRTY;
+        this.dirty = from == offset || to == end ? CONTENT_DIRTY : CHILD_DIRTY;
         if (from == startInside && to == endInside &&
-            (child.contentLost || child.dom.parentNode != this$1.contentDOM)) { child.dirty = NODE_DIRTY; }
+            (child.contentLost || child.dom.parentNode != this.contentDOM)) { child.dirty = NODE_DIRTY; }
         else { child.markDirty(from - startInside, to - startInside); }
         return
       } else {
@@ -53161,14 +53390,13 @@ ViewDesc.prototype.markDirty = function markDirty (from, to) {
 };
 
 ViewDesc.prototype.markParentsDirty = function markParentsDirty () {
-  var level = 1;
   for (var node = this.parent; node; node = node.parent) {
-    var dirty = level == 1 ? CONTENT_DIRTY : CHILD_DIRTY;
+    var dirty =  CONTENT_DIRTY ;
     if (node.dirty < dirty) { node.dirty = dirty; }
   }
 };
 
-Object.defineProperties( ViewDesc.prototype, prototypeAccessors$1 );
+Object.defineProperties( ViewDesc.prototype, prototypeAccessors );
 
 // Reused array to avoid allocating fresh arrays for things that will
 // stay empty anyway.
@@ -53176,7 +53404,7 @@ var nothing = [];
 
 // A widget desc represents a widget decoration, which is a DOM node
 // drawn between the document nodes.
-var WidgetViewDesc = (function (ViewDesc) {
+var WidgetViewDesc = /*@__PURE__*/(function (ViewDesc) {
   function WidgetViewDesc(parent, widget, view, pos) {
     var self, dom = widget.type.toDOM;
     if (typeof dom == "function") { dom = dom(view, function () {
@@ -53201,7 +53429,7 @@ var WidgetViewDesc = (function (ViewDesc) {
   WidgetViewDesc.prototype = Object.create( ViewDesc && ViewDesc.prototype );
   WidgetViewDesc.prototype.constructor = WidgetViewDesc;
 
-  var prototypeAccessors$1 = { beforePosition: {} };
+  var prototypeAccessors$1 = { beforePosition: { configurable: true } };
 
   prototypeAccessors$1.beforePosition.get = function () {
     return this.widget.type.side < 0
@@ -53223,7 +53451,7 @@ var WidgetViewDesc = (function (ViewDesc) {
   return WidgetViewDesc;
 }(ViewDesc));
 
-var CompositionViewDesc = (function (ViewDesc) {
+var CompositionViewDesc = /*@__PURE__*/(function (ViewDesc) {
   function CompositionViewDesc(parent, dom, textDOM, text) {
     ViewDesc.call(this, parent, nothing, dom, null);
     this.textDOM = textDOM;
@@ -53234,7 +53462,7 @@ var CompositionViewDesc = (function (ViewDesc) {
   CompositionViewDesc.prototype = Object.create( ViewDesc && ViewDesc.prototype );
   CompositionViewDesc.prototype.constructor = CompositionViewDesc;
 
-  var prototypeAccessors$2 = { size: {} };
+  var prototypeAccessors$2 = { size: { configurable: true } };
 
   prototypeAccessors$2.size.get = function () { return this.text.length };
 
@@ -53261,7 +53489,7 @@ var CompositionViewDesc = (function (ViewDesc) {
 // a fixed nesting order, for simplicity and predictability, so in
 // some cases they will be split more often than would appear
 // necessary.
-var MarkViewDesc = (function (ViewDesc) {
+var MarkViewDesc = /*@__PURE__*/(function (ViewDesc) {
   function MarkViewDesc(parent, mark, dom, contentDOM) {
     ViewDesc.call(this, parent, [], dom, contentDOM);
     this.mark = mark;
@@ -53275,7 +53503,7 @@ var MarkViewDesc = (function (ViewDesc) {
     var custom = view.nodeViews[mark.type.name];
     var spec = custom && custom(mark, view, inline);
     if (!spec || !spec.dom)
-      { spec = prosemirrorModel.DOMSerializer.renderSpec(document, mark.type.spec.toDOM(mark, inline)); }
+      { spec = prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["DOMSerializer"].renderSpec(document, mark.type.spec.toDOM(mark, inline)); }
     return new MarkViewDesc(parent, mark, spec.dom, spec.contentDOM || spec.dom)
   };
 
@@ -53310,7 +53538,7 @@ var MarkViewDesc = (function (ViewDesc) {
 // Node view descs are the main, most common type of view desc, and
 // correspond to an actual node in the document. Unlike mark descs,
 // they populate their child array themselves.
-var NodeViewDesc = (function (ViewDesc) {
+var NodeViewDesc = /*@__PURE__*/(function (ViewDesc) {
   function NodeViewDesc(parent, node, outerDeco, innerDeco, dom, contentDOM, nodeDOM, view, pos) {
     ViewDesc.call(this, parent, node.isLeaf ? nothing : [], dom, contentDOM);
     this.nodeDOM = nodeDOM;
@@ -53324,7 +53552,7 @@ var NodeViewDesc = (function (ViewDesc) {
   NodeViewDesc.prototype = Object.create( ViewDesc && ViewDesc.prototype );
   NodeViewDesc.prototype.constructor = NodeViewDesc;
 
-  var prototypeAccessors$3 = { size: {},border: {} };
+  var prototypeAccessors$3 = { size: { configurable: true },border: { configurable: true } };
 
   // By default, a node is rendered using the `toDOM` method from the
   // node type spec. But client code can use the `nodeViews` spec to
@@ -53336,6 +53564,8 @@ var NodeViewDesc = (function (ViewDesc) {
   // implementation details to the user code that they probably will
   // never need.)
   NodeViewDesc.create = function create (parent, node, outerDeco, innerDeco, view, pos) {
+    var assign;
+
     var custom = view.nodeViews[node.type.name], descObj;
     var spec = custom && custom(node, view, function () {
       // (This is a function that allows the custom view to find its
@@ -53349,8 +53579,7 @@ var NodeViewDesc = (function (ViewDesc) {
       if (!dom) { dom = document.createTextNode(node.text); }
       else if (dom.nodeType != 3) { throw new RangeError("Text must be rendered as a DOM text node") }
     } else if (!dom) {
-      var assign;
-      ((assign = prosemirrorModel.DOMSerializer.renderSpec(document, node.type.spec.toDOM(node)), dom = assign.dom, contentDOM = assign.contentDOM));
+((assign = prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["DOMSerializer"].renderSpec(document, node.type.spec.toDOM(node)), dom = assign.dom, contentDOM = assign.contentDOM));
     }
     if (!contentDOM && !node.isText && dom.nodeName != "BR") { // Chrome gets confused by <br contenteditable=false>
       if (!dom.hasAttribute("contenteditable")) { dom.contentEditable = false; }
@@ -53381,7 +53610,7 @@ var NodeViewDesc = (function (ViewDesc) {
     var rule = {node: this.node.type.name, attrs: this.node.attrs};
     if (this.node.type.spec.code) { rule.preserveWhitespace = "full"; }
     if (this.contentDOM && !this.contentLost) { rule.contentElement = this.contentDOM; }
-    else { rule.getContent = function () { return this$1.contentDOM ? prosemirrorModel.Fragment.empty : this$1.node.content; }; }
+    else { rule.getContent = function () { return this$1.contentDOM ? prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].empty : this$1.node.content; }; }
     return rule
   };
 
@@ -53408,7 +53637,7 @@ var NodeViewDesc = (function (ViewDesc) {
       if (widget.spec.marks)
         { updater.syncToMarks(widget.spec.marks, inline, view); }
       else if (widget.type.side >= 0)
-        { updater.syncToMarks(i == this$1.node.childCount ? prosemirrorModel.Mark.none : this$1.node.child(i).marks, inline, view); }
+        { updater.syncToMarks(i == this$1.node.childCount ? prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Mark"].none : this$1.node.child(i).marks, inline, view); }
       // If the next node is a desc matching this widget, reuse it,
       // otherwise insert the widget as a new view desc.
       updater.placeWidget(widget, view, off);
@@ -53438,7 +53667,7 @@ var NodeViewDesc = (function (ViewDesc) {
   };
 
   NodeViewDesc.prototype.renderChildren = function renderChildren () {
-    renderDescs(this.contentDOM, this.children, NodeViewDesc.is);
+    renderDescs(this.contentDOM, this.children);
     if (result.ios) { iosHacks(this.dom); }
   };
 
@@ -53449,7 +53678,7 @@ var NodeViewDesc = (function (ViewDesc) {
     var ref = view.state.selection;
     var from = ref.from;
     var to = ref.to;
-    if (!(view.state.selection instanceof prosemirrorState.TextSelection) || from < pos || to > pos + this.node.content.size) { return }
+    if (!(view.state.selection instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"]) || from < pos || to > pos + this.node.content.size) { return }
     var sel = view.root.getSelection();
     var textNode = nearbyTextNode(sel.focusNode, sel.focusOffset);
     if (!textNode || !this.dom.contains(textNode.parentNode)) { return }
@@ -53464,7 +53693,6 @@ var NodeViewDesc = (function (ViewDesc) {
   };
 
   NodeViewDesc.prototype.protectLocalComposition = function protectLocalComposition (view, ref) {
-    var this$1 = this;
     var node = ref.node;
     var pos = ref.pos;
     var text = ref.text;
@@ -53475,7 +53703,7 @@ var NodeViewDesc = (function (ViewDesc) {
     // Create a composition view for the orphaned nodes
     var topNode = node;
     for (;; topNode = topNode.parentNode) {
-      if (topNode.parentNode == this$1.contentDOM) { break }
+      if (topNode.parentNode == this.contentDOM) { break }
       while (topNode.previousSibling) { topNode.parentNode.removeChild(topNode.previousSibling); }
       while (topNode.nextSibling) { topNode.parentNode.removeChild(topNode.nextSibling); }
       if (topNode.pmViewDesc) { topNode.pmViewDesc = null; }
@@ -53543,7 +53771,7 @@ function docViewDesc(doc, outerDeco, innerDeco, dom, view) {
   return new NodeViewDesc(null, doc, outerDeco, innerDeco, dom, dom, dom, view, 0)
 }
 
-var TextViewDesc = (function (NodeViewDesc) {
+var TextViewDesc = /*@__PURE__*/(function (NodeViewDesc) {
   function TextViewDesc(parent, node, outerDeco, innerDeco, dom, nodeDOM, view) {
     NodeViewDesc.call(this, parent, node, outerDeco, innerDeco, dom, null, nodeDOM, view);
   }
@@ -53596,7 +53824,7 @@ var TextViewDesc = (function (NodeViewDesc) {
 
 // A dummy desc used to tag trailing BR or span nodes created to work
 // around contentEditable terribleness.
-var BRHackViewDesc = (function (ViewDesc) {
+var BRHackViewDesc = /*@__PURE__*/(function (ViewDesc) {
   function BRHackViewDesc () {
     ViewDesc.apply(this, arguments);
   }
@@ -53614,7 +53842,7 @@ var BRHackViewDesc = (function (ViewDesc) {
 // A separate subclass is used for customized node views, so that the
 // extra checks only have to be made for nodes that are actually
 // customized.
-var CustomNodeViewDesc = (function (NodeViewDesc) {
+var CustomNodeViewDesc = /*@__PURE__*/(function (NodeViewDesc) {
   function CustomNodeViewDesc(parent, node, outerDeco, innerDeco, dom, contentDOM, nodeDOM, spec, view, pos) {
     NodeViewDesc.call(this, parent, node, outerDeco, innerDeco, dom, contentDOM, nodeDOM, view, pos);
     this.spec = spec;
@@ -53630,9 +53858,9 @@ var CustomNodeViewDesc = (function (NodeViewDesc) {
   CustomNodeViewDesc.prototype.update = function update (node, outerDeco, innerDeco, view) {
     if (this.dirty == NODE_DIRTY) { return false }
     if (this.spec.update) {
-      var result$$1 = this.spec.update(node, outerDeco);
-      if (result$$1) { this.updateInner(node, outerDeco, innerDeco, view); }
-      return result$$1
+      var result = this.spec.update(node, outerDeco);
+      if (result) { this.updateInner(node, outerDeco, innerDeco, view); }
+      return result
     } else if (!this.contentDOM && !node.isLeaf) {
       return false
     } else {
@@ -53702,26 +53930,26 @@ var noDeco = [new OuterDecoLevel];
 function computeOuterDeco(outerDeco, node, needsWrap) {
   if (outerDeco.length == 0) { return noDeco }
 
-  var top = needsWrap ? noDeco[0] : new OuterDecoLevel, result$$1 = [top];
+  var top = needsWrap ? noDeco[0] : new OuterDecoLevel, result = [top];
 
   for (var i = 0; i < outerDeco.length; i++) {
     var attrs = outerDeco[i].type.attrs, cur = top;
     if (!attrs) { continue }
     if (attrs.nodeName)
-      { result$$1.push(cur = new OuterDecoLevel(attrs.nodeName)); }
+      { result.push(cur = new OuterDecoLevel(attrs.nodeName)); }
 
     for (var name in attrs) {
       var val = attrs[name];
       if (val == null) { continue }
-      if (needsWrap && result$$1.length == 1)
-        { result$$1.push(cur = top = new OuterDecoLevel(node.isInline ? "span" : "div")); }
+      if (needsWrap && result.length == 1)
+        { result.push(cur = top = new OuterDecoLevel(node.isInline ? "span" : "div")); }
       if (name == "class") { cur.class = (cur.class ? cur.class + " " : "") + val; }
       else if (name == "style") { cur.style = (cur.style ? cur.style + ";" : "") + val; }
       else if (name != "nodeName") { cur[name] = val; }
     }
   }
 
-  return result$$1
+  return result
 }
 
 function patchOuterDeco(outerDOM, nodeDOM, prevComputed, curComputed) {
@@ -53817,10 +54045,8 @@ ViewTreeUpdater.prototype.getPreMatch = function getPreMatch (index) {
 // Destroy and remove the children between the given indices in
 // `this.top`.
 ViewTreeUpdater.prototype.destroyBetween = function destroyBetween (start, end) {
-    var this$1 = this;
-
   if (start == end) { return }
-  for (var i = start; i < end; i++) { this$1.top.children[i].destroy(); }
+  for (var i = start; i < end; i++) { this.top.children[i].destroy(); }
   this.top.children.splice(start, end - start);
   this.changed = true;
 };
@@ -53834,8 +54060,6 @@ ViewTreeUpdater.prototype.destroyRest = function destroyRest () {
 // Sync the current stack of mark descs with the given array of
 // marks, reusing existing mark descs when possible.
 ViewTreeUpdater.prototype.syncToMarks = function syncToMarks (marks, inline, view) {
-    var this$1 = this;
-
   var keep = 0, depth = this.stack.length >> 1;
   var maxKeep = Math.min(depth, marks.length);
   while (keep < maxKeep &&
@@ -53843,31 +54067,31 @@ ViewTreeUpdater.prototype.syncToMarks = function syncToMarks (marks, inline, vie
     { keep++; }
 
   while (keep < depth) {
-    this$1.destroyRest();
-    this$1.top.dirty = NOT_DIRTY;
-    this$1.index = this$1.stack.pop();
-    this$1.top = this$1.stack.pop();
+    this.destroyRest();
+    this.top.dirty = NOT_DIRTY;
+    this.index = this.stack.pop();
+    this.top = this.stack.pop();
     depth--;
   }
   while (depth < marks.length) {
-    this$1.stack.push(this$1.top, this$1.index + 1);
+    this.stack.push(this.top, this.index + 1);
     var found = -1;
     for (var i = this.index; i < Math.min(this.index + 3, this.top.children.length); i++) {
-      if (this$1.top.children[i].matchesMark(marks[depth])) { found = i; break }
+      if (this.top.children[i].matchesMark(marks[depth])) { found = i; break }
     }
     if (found > -1) {
-      if (found > this$1.index) {
-        this$1.changed = true;
-        this$1.destroyBetween(this$1.index, found);
+      if (found > this.index) {
+        this.changed = true;
+        this.destroyBetween(this.index, found);
       }
-      this$1.top = this$1.top.children[this$1.index];
+      this.top = this.top.children[this.index];
     } else {
-      var markDesc = MarkViewDesc.create(this$1.top, marks[depth], inline, view);
-      this$1.top.children.splice(this$1.index, 0, markDesc);
-      this$1.top = markDesc;
-      this$1.changed = true;
+      var markDesc = MarkViewDesc.create(this.top, marks[depth], inline, view);
+      this.top.children.splice(this.index, 0, markDesc);
+      this.top = markDesc;
+      this.changed = true;
     }
-    this$1.index = 0;
+    this.index = 0;
     depth++;
   }
 };
@@ -53876,15 +54100,13 @@ ViewTreeUpdater.prototype.syncToMarks = function syncToMarks (marks, inline, vie
 // Try to find a node desc matching the given data. Skip over it and
 // return true when successful.
 ViewTreeUpdater.prototype.findNodeMatch = function findNodeMatch (node, outerDeco, innerDeco, index) {
-    var this$1 = this;
-
   var found = -1, preMatch = index < 0 ? undefined : this.getPreMatch(index), children = this.top.children;
   if (preMatch && preMatch.matchesNode(node, outerDeco, innerDeco)) {
     found = children.indexOf(preMatch);
   } else {
     for (var i = this.index, e = Math.min(children.length, i + 5); i < e; i++) {
       var child = children[i];
-      if (child.matchesNode(node, outerDeco, innerDeco) && this$1.preMatched.indexOf(child) < 0) {
+      if (child.matchesNode(node, outerDeco, innerDeco) && this.preMatched.indexOf(child) < 0) {
         found = i;
         break
       }
@@ -53965,15 +54187,15 @@ ViewTreeUpdater.prototype.addTextblockHacks = function addTextblockHacks () {
 // to node positions in the fragment, and whose elements are either
 // descs matched to the child at that index, or empty.
 function preMatch(frag, descs) {
-  var result$$1 = [], end = frag.childCount;
+  var result = [], end = frag.childCount;
   for (var i = descs.length - 1; end > 0 && i >= 0; i--) {
     var desc = descs[i], node = desc.node;
     if (!node) { continue }
     if (node != frag.child(end - 1)) { break }
-    result$$1.push(desc);
+    result.push(desc);
     --end;
   }
-  return {nodes: result$$1.reverse(), offset: end}
+  return {nodes: result.reverse(), offset: end}
 }
 
 function compareSide(a, b) { return a.type.side - b.type.side }
@@ -54099,21 +54321,21 @@ function findTextInFragment(frag, text, from, to) {
 // right shape in one go, rather than messing with them after
 // creation, but is necessary in the composition hack.
 function replaceNodes(nodes, from, to, view, replacement) {
-  var result$$1 = [];
+  var result = [];
   for (var i = 0, off = 0; i < nodes.length; i++) {
     var child = nodes[i], start = off, end = off += child.size;
     if (start >= to || end <= from) {
-      result$$1.push(child);
+      result.push(child);
     } else {
-      if (start < from) { result$$1.push(child.slice(0, from - start, view)); }
+      if (start < from) { result.push(child.slice(0, from - start, view)); }
       if (replacement) {
-        result$$1.push(replacement);
+        result.push(replacement);
         replacement = null;
       }
-      if (end > to) { result$$1.push(child.slice(to - start, child.size, view)); }
+      if (end > to) { result.push(child.slice(to - start, child.size, view)); }
     }
   }
-  return result$$1
+  return result
 }
 
 function moveSelectionBlock(state, dir) {
@@ -54122,7 +54344,7 @@ function moveSelectionBlock(state, dir) {
   var $head = ref.$head;
   var $side = dir > 0 ? $anchor.max($head) : $anchor.min($head);
   var $start = !$side.parent.inlineContent ? $side : $side.depth ? state.doc.resolve(dir > 0 ? $side.after() : $side.before()) : null;
-  return $start && prosemirrorState.Selection.findFrom($start, dir)
+  return $start && prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["Selection"].findFrom($start, dir)
 }
 
 function apply(view, sel) {
@@ -54132,31 +54354,31 @@ function apply(view, sel) {
 
 function selectHorizontally(view, dir, mods) {
   var sel = view.state.selection;
-  if (sel instanceof prosemirrorState.TextSelection) {
+  if (sel instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"]) {
     if (!sel.empty || mods.indexOf("s") > -1) {
       return false
     } else if (view.endOfTextblock(dir > 0 ? "right" : "left")) {
       var next = moveSelectionBlock(view.state, dir);
-      if (next && (next instanceof prosemirrorState.NodeSelection)) { return apply(view, next) }
+      if (next && (next instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"])) { return apply(view, next) }
       return false
     } else {
       var $head = sel.$head, node = $head.textOffset ? null : dir < 0 ? $head.nodeBefore : $head.nodeAfter, desc;
       if (!node || node.isText) { return false }
       var nodePos = dir < 0 ? $head.pos - node.nodeSize : $head.pos;
       if (!(node.isAtom || (desc = view.docView.descAt(nodePos)) && !desc.contentDOM)) { return false }
-      if (prosemirrorState.NodeSelection.isSelectable(node)) {
-        return apply(view, new prosemirrorState.NodeSelection(dir < 0 ? view.state.doc.resolve($head.pos - node.nodeSize) : $head))
+      if (prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"].isSelectable(node)) {
+        return apply(view, new prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"](dir < 0 ? view.state.doc.resolve($head.pos - node.nodeSize) : $head))
       } else if (result.webkit) {
         // Chrome and Safari will introduce extra pointless cursor
         // positions around inline uneditable nodes, so we have to
         // take over and move the cursor past them (#937)
-        return apply(view, new prosemirrorState.TextSelection(view.state.doc.resolve(dir < 0 ? nodePos : nodePos + node.nodeSize)))
+        return apply(view, new prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"](view.state.doc.resolve(dir < 0 ? nodePos : nodePos + node.nodeSize)))
       } else {
         return false
       }
     }
-  } else if (sel instanceof prosemirrorState.NodeSelection && sel.node.isInline) {
-    return apply(view, new prosemirrorState.TextSelection(dir > 0 ? sel.$to : sel.$from))
+  } else if (sel instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"] && sel.node.isInline) {
+    return apply(view, new prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"](dir > 0 ? sel.$to : sel.$from))
   } else {
     var next$1 = moveSelectionBlock(view.state, dir);
     if (next$1) { return apply(view, next$1) }
@@ -54285,24 +54507,24 @@ function setSelFocus(view, sel, node, offset) {
 // browser)
 function selectVertically(view, dir, mods) {
   var sel = view.state.selection;
-  if (sel instanceof prosemirrorState.TextSelection && !sel.empty || mods.indexOf("s") > -1) { return false }
+  if (sel instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"] && !sel.empty || mods.indexOf("s") > -1) { return false }
   var $from = sel.$from;
   var $to = sel.$to;
 
   if (!$from.parent.inlineContent || view.endOfTextblock(dir < 0 ? "up" : "down")) {
     var next = moveSelectionBlock(view.state, dir);
-    if (next && (next instanceof prosemirrorState.NodeSelection))
+    if (next && (next instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"]))
       { return apply(view, next) }
   }
   if (!$from.parent.inlineContent) {
-    var beyond = prosemirrorState.Selection.findFrom(dir < 0 ? $from : $to, dir);
+    var beyond = prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["Selection"].findFrom(dir < 0 ? $from : $to, dir);
     return beyond ? apply(view, beyond) : true
   }
   return false
 }
 
 function stopNativeHorizontalDelete(view, dir) {
-  if (!(view.state.selection instanceof prosemirrorState.TextSelection)) { return true }
+  if (!(view.state.selection instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"])) { return true }
   var ref = view.state.selection;
   var $head = ref.$head;
   var $anchor = ref.$anchor;
@@ -54352,12 +54574,12 @@ function chromeDownArrowBug(view) {
 // block selections.
 
 function getMods(event) {
-  var result$$1 = "";
-  if (event.ctrlKey) { result$$1 += "c"; }
-  if (event.metaKey) { result$$1 += "m"; }
-  if (event.altKey) { result$$1 += "a"; }
-  if (event.shiftKey) { result$$1 += "s"; }
-  return result$$1
+  var result = "";
+  if (event.ctrlKey) { result += "c"; }
+  if (event.metaKey) { result += "m"; }
+  if (event.altKey) { result += "a"; }
+  if (event.shiftKey) { result += "s"; }
+  return result
 }
 
 function captureKeyDown(view, event) {
@@ -54391,9 +54613,9 @@ function selectionFromDOM(view, origin) {
   if (selectionCollapsed(domSel)) {
     $anchor = $head;
     while (nearestDesc && !nearestDesc.node) { nearestDesc = nearestDesc.parent; }
-    if (nearestDesc && nearestDesc.node.isAtom && prosemirrorState.NodeSelection.isSelectable(nearestDesc.node) && nearestDesc.parent) {
+    if (nearestDesc && nearestDesc.node.isAtom && prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"].isSelectable(nearestDesc.node) && nearestDesc.parent) {
       var pos = nearestDesc.posBefore;
-      selection = new prosemirrorState.NodeSelection(head == pos ? $head : doc.resolve(pos));
+      selection = new prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"](head == pos ? $head : doc.resolve(pos));
     }
   } else {
     $anchor = doc.resolve(view.docView.posFromDOM(domSel.anchorNode, domSel.anchorOffset));
@@ -54406,21 +54628,11 @@ function selectionFromDOM(view, origin) {
   return selection
 }
 
-function selectionToDOM(view, takeFocus, force) {
+function selectionToDOM(view, force) {
   var sel = view.state.selection;
   syncNodeSelection(view, sel);
 
-  if (view.editable && !view.hasFocus()) {
-    if (!takeFocus) { return }
-    // See https://bugzilla.mozilla.org/show_bug.cgi?id=921444
-    if (result.gecko && result.gecko_version <= 55) {
-      view.domObserver.disconnectSelection();
-      view.dom.focus();
-      view.domObserver.connectSelection();
-    }
-  } else if (!view.editable && !(hasSelection(view) && document.activeElement.contains(view.dom)) && !takeFocus) {
-    return
-  }
+  if (view.editable ? !view.hasFocus() : !(hasSelection(view) && document.activeElement.contains(view.dom))) { return }
 
   view.domObserver.disconnectSelection();
 
@@ -54430,7 +54642,7 @@ function selectionToDOM(view, takeFocus, force) {
     var anchor = sel.anchor;
     var head = sel.head;
     var resetEditableFrom, resetEditableTo;
-    if (brokenSelectBetweenUneditable && !(sel instanceof prosemirrorState.TextSelection)) {
+    if (brokenSelectBetweenUneditable && !(sel instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"])) {
       if (!sel.$from.parent.inlineContent)
         { resetEditableFrom = temporarilyEditableNear(view, sel.from); }
       if (!sel.empty && !sel.$from.parent.inlineContent)
@@ -54509,7 +54721,7 @@ function selectCursorWrapper(view) {
 }
 
 function syncNodeSelection(view, sel) {
-  if (sel instanceof prosemirrorState.NodeSelection) {
+  if (sel instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"]) {
     var desc = view.docView.descAt(sel.from);
     if (desc != view.lastSelectedViewDesc) {
       clearNodeSelection(view);
@@ -54532,7 +54744,7 @@ function clearNodeSelection(view) {
 
 function selectionBetween(view, $anchor, $head, bias) {
   return view.someProp("createSelectionBetween", function (f) { return f(view, $anchor, $head); })
-    || prosemirrorState.TextSelection.between($anchor, $head, bias)
+    || prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"].between($anchor, $head, bias)
 }
 
 function hasFocusAndSelection(view) {
@@ -54590,7 +54802,7 @@ function parseBetween(view, from_, to_) {
     }
   }
   var startDoc = view.state.doc;
-  var parser = view.someProp("domParser") || prosemirrorModel.DOMParser.fromSchema(view.state.schema);
+  var parser = view.someProp("domParser") || prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["DOMParser"].fromSchema(view.state.schema);
   var $from = startDoc.resolve(from);
 
   var sel = null, doc = parser.parse(parent, {
@@ -54667,7 +54879,7 @@ function readDOMChange(view, from, to, typeOver) {
 
   var change = findDiff(compare.content, parse.doc.content, parse.from, preferredPos, preferredSide);
   if (!change) {
-    if (typeOver && sel instanceof prosemirrorState.TextSelection && !sel.empty && sel.$head.sameParent(sel.$anchor) &&
+    if (typeOver && sel instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"] && !sel.empty && sel.$head.sameParent(sel.$anchor) &&
         !view.composing && !(parse.sel && parse.sel.anchor != parse.sel.head)) {
       change = {start: sel.from, endA: sel.to, endB: sel.to};
     } else {
@@ -54684,7 +54896,7 @@ function readDOMChange(view, from, to, typeOver) {
   // that's smaller than what was actually overwritten.
   if (view.state.selection.from < view.state.selection.to &&
       change.start == change.endB &&
-      view.state.selection instanceof prosemirrorState.TextSelection) {
+      view.state.selection instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"]) {
     if (change.start > view.state.selection.from && change.start <= view.state.selection.from + 2) {
       change.start = view.state.selection.from;
     } else if (change.endA < view.state.selection.to && change.endA >= view.state.selection.to - 2) {
@@ -54710,7 +54922,7 @@ function readDOMChange(view, from, to, typeOver) {
   // If this looks like the effect of pressing Enter, just dispatch an
   // Enter key instead.
   if (!$from.sameParent($to) && $from.pos < parse.doc.content.size &&
-      (nextSel = prosemirrorState.Selection.findFrom(parse.doc.resolve($from.pos + 1), 1, true)) &&
+      (nextSel = prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["Selection"].findFrom(parse.doc.resolve($from.pos + 1), 1, true)) &&
       nextSel.head == $to.pos &&
       view.someProp("handleKeyDown", function (f) { return f(view, keyEvent(13, "Enter")); }))
     { return }
@@ -54758,7 +54970,10 @@ function readDOMChange(view, from, to, typeOver) {
     // Chrome Android will sometimes, during composition, report the
     // selection in the wrong place. If it looks like that is
     // happening, don't update the selection.
-    if (sel$2 && !(result.chrome && result.android && view.composing && sel$2.empty && sel$2.head == chFrom))
+    // Edge just doesn't move the cursor forward when you start typing
+    // in an empty block or between br nodes.
+    if (sel$2 && !(result.chrome && result.android && view.composing && sel$2.empty && sel$2.head == chFrom ||
+                 result.ie && sel$2.empty && sel$2.head == chFrom))
       { tr.setSelection(sel$2); }
   }
   if (storedMarks) { tr.ensureMarks(storedMarks); }
@@ -54792,7 +55007,7 @@ function isMarkChange(cur, prev) {
   }
   var updated = [];
   for (var i$2 = 0; i$2 < prev.childCount; i$2++) { updated.push(update(prev.child(i$2))); }
-  if (prosemirrorModel.Fragment.from(updated).eq(cur)) { return {mark: mark, type: type} }
+  if (prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(updated).eq(cur)) { return {mark: mark, type: type} }
 }
 
 function looksLikeJoin(old, start, end, $newStart, $newEnd) {
@@ -54871,7 +55086,7 @@ function serializeForClipboard(view, slice) {
     content = node.content;
   }
 
-  var serializer = view.someProp("clipboardSerializer") || prosemirrorModel.DOMSerializer.fromSchema(view.state.schema);
+  var serializer = view.someProp("clipboardSerializer") || prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["DOMSerializer"].fromSchema(view.state.schema);
   var doc = detachedDoc(), wrap = doc.createElement("div");
   wrap.appendChild(serializer.serializeFragment(content, {document: doc}));
 
@@ -54902,7 +55117,7 @@ function parseFromClipboard(view, text, html, plainText, $context) {
   var asText = text && (plainText || inCode || !html);
   if (asText) {
     view.someProp("transformPastedText", function (f) { text = f(text); });
-    if (inCode) { return new prosemirrorModel.Slice(prosemirrorModel.Fragment.from(view.state.schema.text(text)), 0, 0) }
+    if (inCode) { return new prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"](prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(view.state.schema.text(text)), 0, 0) }
     var parsed = view.someProp("clipboardTextParser", function (f) { return f(text, $context); });
     if (parsed) {
       slice = parsed;
@@ -54920,13 +55135,13 @@ function parseFromClipboard(view, text, html, plainText, $context) {
   var contextNode = dom && dom.querySelector("[data-pm-slice]");
   var sliceData = contextNode && /^(\d+) (\d+) (.*)/.exec(contextNode.getAttribute("data-pm-slice"));
   if (!slice) {
-    var parser = view.someProp("clipboardParser") || view.someProp("domParser") || prosemirrorModel.DOMParser.fromSchema(view.state.schema);
+    var parser = view.someProp("clipboardParser") || view.someProp("domParser") || prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["DOMParser"].fromSchema(view.state.schema);
     slice = parser.parseSlice(dom, {preserveWhitespace: !!(asText || sliceData), context: $context});
   }
   if (sliceData)
     { slice = addContext(closeSlice(slice, +sliceData[1], +sliceData[2]), sliceData[3]); }
   else // HTML wasn't created by ProseMirror. Make sure top-level siblings are coherent
-    { slice = prosemirrorModel.Slice.maxOpen(normalizeSiblings(slice.content, $context), false); }
+    { slice = prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"].maxOpen(normalizeSiblings(slice.content, $context), false); }
 
   view.someProp("transformPasted", function (f) { slice = f(slice); });
   return slice
@@ -54960,7 +55175,7 @@ function normalizeSiblings(fragment, $context) {
         lastWrap = wrap;
       }
     });
-    if (result) { return { v: prosemirrorModel.Fragment.from(result) } }
+    if (result) { return { v: prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(result) } }
   };
 
   for (var d = $context.depth; d >= 0; d--) {
@@ -54975,7 +55190,7 @@ function withWrappers(node, wrap, from) {
   if ( from === void 0 ) from = 0;
 
   for (var i = wrap.length - 1; i >= from; i--)
-    { node = wrap[i].create(null, prosemirrorModel.Fragment.from(node)); }
+    { node = wrap[i].create(null, prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(node)); }
   return node
 }
 
@@ -54987,14 +55202,14 @@ function addToSibling(wrap, lastWrap, node, sibling, depth) {
     if (inner) { return sibling.copy(sibling.content.replaceChild(sibling.childCount - 1, inner)) }
     var match = sibling.contentMatchAt(sibling.childCount);
     if (match.matchType(depth == wrap.length - 1 ? node.type : wrap[depth + 1]))
-      { return sibling.copy(sibling.content.append(prosemirrorModel.Fragment.from(withWrappers(node, wrap, depth + 1)))) }
+      { return sibling.copy(sibling.content.append(prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(withWrappers(node, wrap, depth + 1)))) }
   }
 }
 
 function closeRight(node, depth) {
   if (depth == 0) { return node }
   var fragment = node.content.replaceChild(node.childCount - 1, closeRight(node.lastChild, depth - 1));
-  var fill = node.contentMatchAt(node.childCount).fillBefore(prosemirrorModel.Fragment.empty, true);
+  var fill = node.contentMatchAt(node.childCount).fillBefore(prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].empty, true);
   return node.copy(fragment.append(fill))
 }
 
@@ -55003,15 +55218,15 @@ function closeRange(fragment, side, from, to, depth, openEnd) {
   if (depth < to - 1) { inner = closeRange(inner, side, from, to, depth + 1, openEnd); }
   if (depth >= from)
     { inner = side < 0 ? node.contentMatchAt(0).fillBefore(inner, fragment.childCount > 1 || openEnd <= depth).append(inner)
-      : inner.append(node.contentMatchAt(node.childCount).fillBefore(prosemirrorModel.Fragment.empty, true)); }
+      : inner.append(node.contentMatchAt(node.childCount).fillBefore(prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].empty, true)); }
   return fragment.replaceChild(side < 0 ? 0 : fragment.childCount - 1, node.copy(inner))
 }
 
 function closeSlice(slice, openStart, openEnd) {
   if (openStart < slice.openStart)
-    { slice = new prosemirrorModel.Slice(closeRange(slice.content, -1, openStart, slice.openStart, 0, slice.openEnd), openStart, slice.openEnd); }
+    { slice = new prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"](closeRange(slice.content, -1, openStart, slice.openStart, 0, slice.openEnd), openStart, slice.openEnd); }
   if (openEnd < slice.openEnd)
-    { slice = new prosemirrorModel.Slice(closeRange(slice.content, 1, openEnd, slice.openEnd, 0, 0), slice.openStart, openEnd); }
+    { slice = new prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"](closeRange(slice.content, 1, openEnd, slice.openEnd, 0, 0), slice.openStart, openEnd); }
   return slice
 }
 
@@ -55051,10 +55266,10 @@ function addContext(slice, context) {
   for (var i = array.length - 2; i >= 0; i -= 2) {
     var type = schema.nodes[array[i]];
     if (!type || type.hasRequiredAttrs()) { break }
-    content = prosemirrorModel.Fragment.from(type.create(array[i + 1], content));
+    content = prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Fragment"].from(type.create(array[i + 1], content));
     openStart++; openEnd++;
   }
-  return new prosemirrorModel.Slice(content, openStart, openEnd)
+  return new prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"](content, openStart, openEnd)
 }
 
 var observeOptions = {
@@ -55137,7 +55352,7 @@ DOMObserver.prototype.stop = function stop () {
   if (this.observer) {
     var take = this.observer.takeRecords();
     if (take.length) {
-      for (var i = 0; i < take.length; i++) { this$1.queue.push(take[i]); }
+      for (var i = 0; i < take.length; i++) { this.queue.push(take[i]); }
       window.setTimeout(function () { return this$1.flush(); }, 20);
     }
     this.observer.disconnect();
@@ -55188,8 +55403,6 @@ DOMObserver.prototype.ignoreSelectionChange = function ignoreSelectionChange (se
 };
 
 DOMObserver.prototype.flush = function flush () {
-    var this$1 = this;
-
   if (!this.view.docView || this.flushingSoon) { return }
   var mutations = this.observer ? this.observer.takeRecords() : [];
   if (this.queue.length) {
@@ -55200,17 +55413,18 @@ DOMObserver.prototype.flush = function flush () {
   var sel = this.view.root.getSelection();
   var newSel = !this.suppressingSelectionUpdates && !this.currentSelection.eq(sel) && hasSelection(this.view) && !this.ignoreSelectionChange(sel);
 
-  var from = -1, to = -1, typeOver = false;
+  var from = -1, to = -1, typeOver = false, added = [];
   if (this.view.editable) {
     for (var i = 0; i < mutations.length; i++) {
-      var result$$1 = this$1.registerMutation(mutations[i]);
-      if (result$$1) {
-        from = from < 0 ? result$$1.from : Math.min(result$$1.from, from);
-        to = to < 0 ? result$$1.to : Math.max(result$$1.to, to);
-        if (result$$1.typeOver && !this$1.view.composing) { typeOver = true; }
+      var result = this.registerMutation(mutations[i], added);
+      if (result) {
+        from = from < 0 ? result.from : Math.min(result.from, from);
+        to = to < 0 ? result.to : Math.max(result.to, to);
+        if (result.typeOver && !this.view.composing) { typeOver = true; }
       }
     }
   }
+
   if (from > -1 || newSel) {
     if (from > -1) {
       this.view.docView.markDirty(from, to);
@@ -55222,7 +55436,9 @@ DOMObserver.prototype.flush = function flush () {
   }
 };
 
-DOMObserver.prototype.registerMutation = function registerMutation (mut) {
+DOMObserver.prototype.registerMutation = function registerMutation (mut, added) {
+  // Ignore mutations inside nodes that were already noted as inserted
+  if (added.indexOf(mut.target) > -1) { return null }
   var desc = this.view.docView.nearestDesc(mut.target);
   if (mut.type == "attributes" &&
       (desc == this.view.docView || mut.attributeName == "contenteditable" ||
@@ -55249,6 +55465,7 @@ DOMObserver.prototype.registerMutation = function registerMutation (mut) {
     var from = desc.localPosFromDOM(mut.target, fromOffset, -1);
     var toOffset = next && next.parentNode == mut.target
         ? domIndex(next) : mut.target.childNodes.length;
+    for (var i$1 = 0; i$1 < mut.addedNodes.length; i$1++) { added.push(mut.addedNodes[i$1]); }
     var to = desc.localPosFromDOM(mut.target, toOffset, 1);
     return {from: from, to: to}
   } else if (mut.type == "attributes") {
@@ -55277,8 +55494,7 @@ function checkCSS(view) {
 
 // A collection of DOM events that occur within the editor, and callback functions
 // to invoke when the event fires.
-var handlers = {};
-var editHandlers = {};
+var handlers = {}, editHandlers = {};
 
 function initInput(view) {
   view.shiftKey = false;
@@ -55385,7 +55601,7 @@ editHandlers.keypress = function (view, event) {
   }
 
   var sel = view.state.selection;
-  if (!(sel instanceof prosemirrorState.TextSelection) || !sel.$from.sameParent(sel.$to)) {
+  if (!(sel instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"]) || !sel.$from.sameParent(sel.$to)) {
     var text = String.fromCharCode(event.charCode);
     if (!view.someProp("handleTextInput", function (f) { return f(view, sel.$from.pos, sel.$to.pos, text); }))
       { view.dispatch(view.state.tr.insertText(text).scrollIntoView()); }
@@ -55427,8 +55643,8 @@ function updateSelection(view, selection, origin) {
 function selectClickedLeaf(view, inside) {
   if (inside == -1) { return false }
   var $pos = view.state.doc.resolve(inside), node = $pos.nodeAfter;
-  if (node && node.isAtom && prosemirrorState.NodeSelection.isSelectable(node)) {
-    updateSelection(view, new prosemirrorState.NodeSelection($pos), "pointer");
+  if (node && node.isAtom && prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"].isSelectable(node)) {
+    updateSelection(view, new prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"]($pos), "pointer");
     return true
   }
   return false
@@ -55437,12 +55653,12 @@ function selectClickedLeaf(view, inside) {
 function selectClickedNode(view, inside) {
   if (inside == -1) { return false }
   var sel = view.state.selection, selectedNode, selectAt;
-  if (sel instanceof prosemirrorState.NodeSelection) { selectedNode = sel.node; }
+  if (sel instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"]) { selectedNode = sel.node; }
 
   var $pos = view.state.doc.resolve(inside);
   for (var i = $pos.depth + 1; i > 0; i--) {
     var node = i > $pos.depth ? $pos.nodeAfter : $pos.node(i);
-    if (prosemirrorState.NodeSelection.isSelectable(node)) {
+    if (prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"].isSelectable(node)) {
       if (selectedNode && sel.$from.depth > 0 &&
           i >= sel.$from.depth && $pos.before(sel.$from.depth + 1) == sel.$from.pos)
         { selectAt = $pos.before(sel.$from.depth); }
@@ -55453,7 +55669,7 @@ function selectClickedNode(view, inside) {
   }
 
   if (selectAt != null) {
-    updateSelection(view, prosemirrorState.NodeSelection.create(view.state.doc, selectAt), "pointer");
+    updateSelection(view, prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"].create(view.state.doc, selectAt), "pointer");
     return true
   } else {
     return false
@@ -55481,7 +55697,7 @@ function defaultTripleClick(view, inside) {
   var doc = view.state.doc;
   if (inside == -1) {
     if (doc.inlineContent) {
-      updateSelection(view, prosemirrorState.TextSelection.create(doc, 0, doc.content.size), "pointer");
+      updateSelection(view, prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"].create(doc, 0, doc.content.size), "pointer");
       return true
     }
     return false
@@ -55492,9 +55708,9 @@ function defaultTripleClick(view, inside) {
     var node = i > $pos.depth ? $pos.nodeAfter : $pos.node(i);
     var nodePos = $pos.before(i);
     if (node.inlineContent)
-      { updateSelection(view, prosemirrorState.TextSelection.create(doc, nodePos + 1, nodePos + 1 + node.content.size), "pointer"); }
-    else if (prosemirrorState.NodeSelection.isSelectable(node))
-      { updateSelection(view, prosemirrorState.NodeSelection.create(doc, nodePos), "pointer"); }
+      { updateSelection(view, prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"].create(doc, nodePos + 1, nodePos + 1 + node.content.size), "pointer"); }
+    else if (prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"].isSelectable(node))
+      { updateSelection(view, prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"].create(doc, nodePos), "pointer"); }
     else
       { continue }
     return true
@@ -55556,7 +55772,7 @@ var MouseDown = function MouseDown(view, pos, event, flushed) {
   this.target = targetDesc ? targetDesc.dom : null;
 
   if (targetNode.type.spec.draggable && targetNode.type.spec.selectable !== false ||
-      view.state.selection instanceof prosemirrorState.NodeSelection && targetPos == view.state.selection.from)
+      view.state.selection instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"] && targetPos == view.state.selection.from)
     { this.mightDrag = {node: targetNode,
                       pos: targetPos,
                       addAttr: this.target && !this.target.draggable,
@@ -55608,9 +55824,9 @@ MouseDown.prototype.up = function up (event) {
              // (hidden) cursor is doesn't change the selection, and
              // thus doesn't get a reaction from ProseMirror. This
              // works around that.
-             (result.chrome && !(this.view.state.selection instanceof prosemirrorState.TextSelection) &&
+             (result.chrome && !(this.view.state.selection instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"]) &&
               (pos.pos == this.view.state.selection.from || pos.pos == this.view.state.selection.to))) {
-    updateSelection(this.view, prosemirrorState.Selection.near(this.view.state.doc.resolve(pos.pos)), "pointer");
+    updateSelection(this.view, prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["Selection"].near(this.view.state.doc.resolve(pos.pos)), "pointer");
     event.preventDefault();
   } else {
     setSelectionOrigin(this.view, "pointer");
@@ -55780,20 +55996,22 @@ function capturePaste(view, e) {
 
 function doPaste(view, text, html, e) {
   var slice = parseFromClipboard(view, text, html, view.shiftKey, view.state.selection.$from);
-  if (view.someProp("handlePaste", function (f) { return f(view, e, slice || prosemirrorModel.Slice.empty); }) || !slice) { return true }
+  if (view.someProp("handlePaste", function (f) { return f(view, e, slice || prosemirror_model__WEBPACK_IMPORTED_MODULE_1__["Slice"].empty); }) || !slice) { return }
 
   var singleNode = sliceSingleNode(slice);
   var tr = singleNode ? view.state.tr.replaceSelectionWith(singleNode, view.shiftKey) : view.state.tr.replaceSelection(slice);
   view.dispatch(tr.scrollIntoView().setMeta("paste", true).setMeta("uiEvent", "paste"));
-  return true
 }
 
 editHandlers.paste = function (view, e) {
   var data = brokenClipboardAPI ? null : e.clipboardData;
-  if (data && (doPaste(view, data.getData("text/plain"), data.getData("text/html"), e) || data.files.length > 0))
-    { e.preventDefault(); }
-  else
-    { capturePaste(view, e); }
+  var html = data && data.getData("text/html"), text = data && data.getData("text/plain");
+  if (data && (html || text || data.files.length)) {
+    doPaste(view, text, html, e);
+    e.preventDefault();
+  } else {
+    capturePaste(view, e);
+  }
 };
 
 var Dragging = function Dragging(slice, move) {
@@ -55810,14 +56028,12 @@ handlers.dragstart = function (view, e) {
 
   var sel = view.state.selection;
   var pos = sel.empty ? null : view.posAtCoords(eventCoords(e));
-  if (pos && pos.pos >= sel.from && pos.pos <= (sel instanceof prosemirrorState.NodeSelection ? sel.to - 1: sel.to)) {
-    // In selection
-  } else if (mouseDown && mouseDown.mightDrag) {
-    view.dispatch(view.state.tr.setSelection(prosemirrorState.NodeSelection.create(view.state.doc, mouseDown.mightDrag.pos)));
+  if (pos && pos.pos >= sel.from && pos.pos <= (sel instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"] ? sel.to - 1: sel.to)) ; else if (mouseDown && mouseDown.mightDrag) {
+    view.dispatch(view.state.tr.setSelection(prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"].create(view.state.doc, mouseDown.mightDrag.pos)));
   } else if (e.target && e.target.nodeType == 1) {
     var desc = view.docView.nearestDesc(e.target, true);
     if (!desc || !desc.node.type.spec.draggable || desc == view.docView) { return }
-    view.dispatch(view.state.tr.setSelection(prosemirrorState.NodeSelection.create(view.state.doc, desc.posBefore)));
+    view.dispatch(view.state.tr.setSelection(prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"].create(view.state.doc, desc.posBefore)));
   }
   var slice = view.state.selection.content();
   var ref = serializeForClipboard(view, slice);
@@ -55852,7 +56068,7 @@ editHandlers.drop = function (view, e) {
 
   e.preventDefault();
   if (view.someProp("handleDrop", function (f) { return f(view, e, slice, dragging && dragging.move); })) { return }
-  var insertPos = slice ? prosemirrorTransform.dropPoint(view.state.doc, $mouse.pos, slice) : $mouse.pos;
+  var insertPos = slice ? Object(prosemirror_transform__WEBPACK_IMPORTED_MODULE_2__["dropPoint"])(view.state.doc, $mouse.pos, slice) : $mouse.pos;
   if (insertPos == null) { insertPos = $mouse.pos; }
 
   var tr = view.state.tr;
@@ -55868,9 +56084,9 @@ editHandlers.drop = function (view, e) {
   if (tr.doc.eq(beforeInsert)) { return }
 
   var $pos = tr.doc.resolve(pos);
-  if (isNode && prosemirrorState.NodeSelection.isSelectable(slice.content.firstChild) &&
+  if (isNode && prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"].isSelectable(slice.content.firstChild) &&
       $pos.nodeAfter && $pos.nodeAfter.sameMarkup(slice.content.firstChild))
-    { tr.setSelection(new prosemirrorState.NodeSelection($pos)); }
+    { tr.setSelection(new prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"]($pos)); }
   else
     { tr.setSelection(selectionBetween(view, $pos, tr.doc.resolve(tr.mapping.map(insertPos)))); }
   view.focus();
@@ -55891,6 +56107,7 @@ handlers.blur = function (view) {
     view.domObserver.stop();
     view.dom.classList.remove("ProseMirror-focused");
     view.domObserver.start();
+    view.domObserver.currentSelection.set({});
     view.focused = false;
   }
 };
@@ -56010,7 +56227,7 @@ var Decoration = function Decoration(from, to, type) {
   this.type = type;
 };
 
-var prototypeAccessors$2 = { spec: {} };
+var prototypeAccessors$1 = { spec: { configurable: true } };
 
 Decoration.prototype.copy = function copy (from, to) {
   return new Decoration(from, to, this.type)
@@ -56109,9 +56326,9 @@ Decoration.node = function node (from, to, attrs, spec) {
 // :: Object
 // The spec provided when creating this decoration. Can be useful
 // if you've stored extra information in that object.
-prototypeAccessors$2.spec.get = function () { return this.type.spec };
+prototypeAccessors$1.spec.get = function () { return this.type.spec };
 
-Object.defineProperties( Decoration.prototype, prototypeAccessors$2 );
+Object.defineProperties( Decoration.prototype, prototypeAccessors$1 );
 
 // DecorationAttrs:: interface
 // A set of attributes to add to a decorated node. Most properties
@@ -56129,8 +56346,7 @@ Object.defineProperties( Decoration.prototype, prototypeAccessors$2 );
 //   When non-null, the target node is wrapped in a DOM element of
 //   this type (and the other attributes are applied to this element).
 
-var none = [];
-var noSpec = {};
+var none = [], noSpec = {};
 
 // ::- A collection of [decorations](#view.Decoration), organized in
 // such a way that the drawing algorithm can efficiently use and
@@ -56162,17 +56378,15 @@ DecorationSet.prototype.find = function find (start, end, predicate) {
 };
 
 DecorationSet.prototype.findInner = function findInner (start, end, result, offset, predicate) {
-    var this$1 = this;
-
   for (var i = 0; i < this.local.length; i++) {
-    var span = this$1.local[i];
+    var span = this.local[i];
     if (span.from <= end && span.to >= start && (!predicate || predicate(span.spec)))
       { result.push(span.copy(span.from + offset, span.to + offset)); }
   }
   for (var i$1 = 0; i$1 < this.children.length; i$1 += 3) {
-    if (this$1.children[i$1] < end && this$1.children[i$1 + 1] > start) {
-      var childOff = this$1.children[i$1] + 1;
-      this$1.children[i$1 + 2].findInner(start - childOff, end - childOff, result, offset + childOff, predicate);
+    if (this.children[i$1] < end && this.children[i$1 + 1] > start) {
+      var childOff = this.children[i$1] + 1;
+      this.children[i$1 + 2].findInner(start - childOff, end - childOff, result, offset + childOff, predicate);
     }
   }
 };
@@ -56193,13 +56407,11 @@ DecorationSet.prototype.map = function map (mapping, doc, options) {
 };
 
 DecorationSet.prototype.mapInner = function mapInner (mapping, node, offset, oldOffset, options) {
-    var this$1 = this;
-
   var newLocal;
   for (var i = 0; i < this.local.length; i++) {
-    var mapped = this$1.local[i].map(mapping, offset, oldOffset);
+    var mapped = this.local[i].map(mapping, offset, oldOffset);
     if (mapped && mapped.type.valid(node, mapped)) { (newLocal || (newLocal = [])).push(mapped); }
-    else if (options.onRemove) { options.onRemove(this$1.local[i].spec); }
+    else if (options.onRemove) { options.onRemove(this.local[i].spec); }
   }
 
   if (this.children.length)
@@ -56249,8 +56461,6 @@ DecorationSet.prototype.remove = function remove (decorations) {
 };
 
 DecorationSet.prototype.removeInner = function removeInner (decorations, offset) {
-    var this$1 = this;
-
   var children = this.children, local = this.local;
   for (var i = 0; i < children.length; i += 3) {
     var found = (void 0), from = children[i] + offset, to = children[i + 1] + offset;
@@ -56261,7 +56471,7 @@ DecorationSet.prototype.removeInner = function removeInner (decorations, offset)
       }
     } }
     if (!found) { continue }
-    if (children == this$1.children) { children = this$1.children.slice(); }
+    if (children == this.children) { children = this.children.slice(); }
     var removed = children[i + 2].removeInner(found, from + 1);
     if (removed != empty) {
       children[i + 2] = removed;
@@ -56272,7 +56482,7 @@ DecorationSet.prototype.removeInner = function removeInner (decorations, offset)
   }
   if (local.length) { for (var i$1 = 0, span$1 = (void 0); i$1 < decorations.length; i$1++) { if (span$1 = decorations[i$1]) {
     for (var j$1 = 0; j$1 < local.length; j$1++) { if (local[j$1].type.eq(span$1.type)) {
-      if (local == this$1.local) { local = this$1.local.slice(); }
+      if (local == this.local) { local = this.local.slice(); }
       local.splice(j$1--, 1);
     } }
   } } }
@@ -56281,19 +56491,17 @@ DecorationSet.prototype.removeInner = function removeInner (decorations, offset)
 };
 
 DecorationSet.prototype.forChild = function forChild (offset, node) {
-    var this$1 = this;
-
   if (this == empty) { return this }
   if (node.isLeaf) { return DecorationSet.empty }
 
   var child, local;
-  for (var i = 0; i < this.children.length; i += 3) { if (this$1.children[i] >= offset) {
-    if (this$1.children[i] == offset) { child = this$1.children[i + 2]; }
+  for (var i = 0; i < this.children.length; i += 3) { if (this.children[i] >= offset) {
+    if (this.children[i] == offset) { child = this.children[i + 2]; }
     break
   } }
   var start = offset + 1, end = start + node.content.size;
   for (var i$1 = 0; i$1 < this.local.length; i$1++) {
-    var dec = this$1.local[i$1];
+    var dec = this.local[i$1];
     if (dec.from < end && dec.to > start && (dec.type instanceof InlineType)) {
       var from = Math.max(start, dec.from) - start, to = Math.min(end, dec.to) - start;
       if (from < to) { (local || (local = [])).push(dec.copy(from, to)); }
@@ -56307,18 +56515,16 @@ DecorationSet.prototype.forChild = function forChild (offset, node) {
 };
 
 DecorationSet.prototype.eq = function eq (other) {
-    var this$1 = this;
-
   if (this == other) { return true }
   if (!(other instanceof DecorationSet) ||
       this.local.length != other.local.length ||
       this.children.length != other.children.length) { return false }
   for (var i = 0; i < this.local.length; i++)
-    { if (!this$1.local[i].eq(other.local[i])) { return false } }
+    { if (!this.local[i].eq(other.local[i])) { return false } }
   for (var i$1 = 0; i$1 < this.children.length; i$1 += 3)
-    { if (this$1.children[i$1] != other.children[i$1] ||
-        this$1.children[i$1 + 1] != other.children[i$1 + 1] ||
-        !this$1.children[i$1 + 2].eq(other.children[i$1 + 2])) { return false } }
+    { if (this.children[i$1] != other.children[i$1] ||
+        this.children[i$1 + 1] != other.children[i$1 + 1] ||
+        !this.children[i$1 + 2].eq(other.children[i$1 + 2])) { return false } }
   return true
 };
 
@@ -56327,14 +56533,12 @@ DecorationSet.prototype.locals = function locals (node) {
 };
 
 DecorationSet.prototype.localsInner = function localsInner (node) {
-    var this$1 = this;
-
   if (this == empty) { return none }
   if (node.inlineContent || !this.local.some(InlineType.is)) { return this.local }
   var result = [];
   for (var i = 0; i < this.local.length; i++) {
-    if (!(this$1.local[i].type instanceof InlineType))
-      { result.push(this$1.local[i]); }
+    if (!(this.local[i].type instanceof InlineType))
+      { result.push(this.local[i]); }
   }
   return result
 };
@@ -56355,12 +56559,10 @@ var DecorationGroup = function DecorationGroup(members) {
 };
 
 DecorationGroup.prototype.forChild = function forChild (offset, child) {
-    var this$1 = this;
-
   if (child.isLeaf) { return DecorationSet.empty }
   var found = [];
   for (var i = 0; i < this.members.length; i++) {
-    var result = this$1.members[i].forChild(offset, child);
+    var result = this.members[i].forChild(offset, child);
     if (result == empty) { continue }
     if (result instanceof DecorationGroup) { found = found.concat(result.members); }
     else { found.push(result); }
@@ -56369,21 +56571,17 @@ DecorationGroup.prototype.forChild = function forChild (offset, child) {
 };
 
 DecorationGroup.prototype.eq = function eq (other) {
-    var this$1 = this;
-
   if (!(other instanceof DecorationGroup) ||
       other.members.length != this.members.length) { return false }
   for (var i = 0; i < this.members.length; i++)
-    { if (!this$1.members[i].eq(other.members[i])) { return false } }
+    { if (!this.members[i].eq(other.members[i])) { return false } }
   return true
 };
 
 DecorationGroup.prototype.locals = function locals (node) {
-    var this$1 = this;
-
   var result, sorted = true;
   for (var i = 0; i < this.members.length; i++) {
-    var locals = this$1.members[i].localsInner(node);
+    var locals = this.members[i].localsInner(node);
     if (!locals.length) { continue }
     if (!result) {
       result = locals;
@@ -56510,7 +56708,7 @@ function takeSpansForNode(spans, node, offset) {
   var end = offset + node.nodeSize, found = null;
   for (var i = 0, span = (void 0); i < spans.length; i++) {
     if ((span = spans[i]) && span.from > offset && span.to < end) {
-      (found || (found = [])).push(span);
+(found || (found = [])).push(span);
       spans[i] = null;
     }
   }
@@ -56655,7 +56853,7 @@ var EditorView = function EditorView(place, props) {
   this.updatePluginViews();
 };
 
-var prototypeAccessors = { props: {},root: {} };
+var prototypeAccessors$2 = { props: { configurable: true },root: { configurable: true } };
 
 // composing:: boolean
 // Holds `true` when a
@@ -56664,13 +56862,11 @@ var prototypeAccessors = { props: {},root: {} };
 
 // :: DirectEditorProps
 // The view's current [props](#view.EditorProps).
-prototypeAccessors.props.get = function () {
-    var this$1 = this;
-
+prototypeAccessors$2.props.get = function () {
   if (this._props.state != this.state) {
     var prev = this._props;
     this._props = {};
-    for (var name in prev) { this$1._props[name] = prev[name]; }
+    for (var name in prev) { this._props[name] = prev[name]; }
     this._props.state = this.state;
   }
   return this._props
@@ -56690,10 +56886,8 @@ EditorView.prototype.update = function update (props) {
 // given as argument. Equivalent to `view.update(Object.assign({},
 // view.props, props))`.
 EditorView.prototype.setProps = function setProps (props) {
-    var this$1 = this;
-
   var updated = {};
-  for (var name in this$1._props) { updated[name] = this$1._props[name]; }
+  for (var name in this._props) { updated[name] = this._props[name]; }
   updated.state = this.state;
   for (var name$1 in props) { updated[name$1] = props[name$1]; }
   this.update(updated);
@@ -56758,7 +56952,7 @@ EditorView.prototype.updateStateInner = function updateStateInner (state, reconf
     // drag selection.
     if (forceSelUpdate ||
         !(this.mouseDown && this.domObserver.currentSelection.eq(this.root.getSelection()) && anchorInRightPlace(this))) {
-      selectionToDOM(this, false, forceSelUpdate);
+      selectionToDOM(this, forceSelUpdate);
     } else {
       syncNodeSelection(this, state.selection);
       this.domObserver.setCurSelection();
@@ -56773,8 +56967,8 @@ EditorView.prototype.updateStateInner = function updateStateInner (state, reconf
   } else if (scroll == "to selection") {
     var startDOM = this.root.getSelection().focusNode;
     if (this.someProp("handleScrollToSelection", function (f) { return f(this$1); }))
-      {} // Handled
-    else if (state.selection instanceof prosemirrorState.NodeSelection)
+      ; // Handled
+    else if (state.selection instanceof prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"])
       { scrollRectIntoView(this, this.docView.domAfterPos(state.selection.from).getBoundingClientRect(), startDOM); }
     else
       { scrollRectIntoView(this, this.coordsAtPos(state.selection.head), startDOM); }
@@ -56789,18 +56983,16 @@ EditorView.prototype.destroyPluginViews = function destroyPluginViews () {
 };
 
 EditorView.prototype.updatePluginViews = function updatePluginViews (prevState) {
-    var this$1 = this;
-
   if (!prevState || prevState.plugins != this.state.plugins) {
     this.destroyPluginViews();
     for (var i = 0; i < this.state.plugins.length; i++) {
-      var plugin = this$1.state.plugins[i];
-      if (plugin.spec.view) { this$1.pluginViews.push(plugin.spec.view(this$1)); }
+      var plugin = this.state.plugins[i];
+      if (plugin.spec.view) { this.pluginViews.push(plugin.spec.view(this)); }
     }
   } else {
     for (var i$1 = 0; i$1 < this.pluginViews.length; i$1++) {
-      var pluginView = this$1.pluginViews[i$1];
-      if (pluginView.update) { pluginView.update(this$1, prevState); }
+      var pluginView = this.pluginViews[i$1];
+      if (pluginView.update) { pluginView.update(this, prevState); }
     }
   }
 };
@@ -56832,11 +57024,8 @@ EditorView.prototype.hasFocus = function hasFocus () {
 // Focus the editor.
 EditorView.prototype.focus = function focus () {
   this.domObserver.stop();
-  selectionToDOM(this, true);
-  if (this.editable) {
-    if (this.dom.setActive) { this.dom.setActive(); } // for IE
-    else { this.dom.focus({preventScroll: true}); }
-  }
+  if (this.editable) { focusPreventScroll(this.dom); }
+  selectionToDOM(this);
   this.domObserver.start();
 };
 
@@ -56845,13 +57034,11 @@ EditorView.prototype.focus = function focus () {
 // usually be the top-level `document`, but might be a [shadow
 // DOM](https://developer.mozilla.org/en-US/docs/Web/Web_Components/Shadow_DOM)
 // root if the editor is inside one.
-prototypeAccessors.root.get = function () {
-    var this$1 = this;
-
+prototypeAccessors$2.root.get = function () {
   var cached = this._root;
   if (cached == null) { for (var search = this.dom.parentNode; search; search = search.parentNode) {
     if (search.nodeType == 9 || (search.nodeType == 11 && search.host))
-      { return this$1._root = search }
+      { return this._root = search }
   } }
   return cached || document
 };
@@ -56963,7 +57150,7 @@ EditorView.prototype.dispatch = function dispatch (tr) {
   else { this.updateState(this.state.apply(tr)); }
 };
 
-Object.defineProperties( EditorView.prototype, prototypeAccessors );
+Object.defineProperties( EditorView.prototype, prototypeAccessors$2 );
 
 function computeDocDeco(view) {
   var attrs = Object.create(null);
@@ -57030,12 +57217,12 @@ function needChromeSelectionForce(context, root) {
 }
 
 function buildNodeViews(view) {
-  var result$$1 = {};
+  var result = {};
   view.someProp("nodeViews", function (obj) {
-    for (var prop in obj) { if (!Object.prototype.hasOwnProperty.call(result$$1, prop))
-      { result$$1[prop] = obj[prop]; } }
+    for (var prop in obj) { if (!Object.prototype.hasOwnProperty.call(result, prop))
+      { result[prop] = obj[prop]; } }
   });
-  return result$$1
+  return result
 }
 
 function changedNodeViews(a, b) {
@@ -57226,25 +57413,22 @@ function changedNodeViews(a, b) {
 //   [applied](#state.EditorState.apply). The callback will be bound to have
 //   the view instance as its `this` binding.
 
-exports.EditorView = EditorView;
-exports.Decoration = Decoration;
-exports.DecorationSet = DecorationSet;
-exports.__serializeForClipboard = serializeForClipboard;
-exports.__parseFromClipboard = parseFromClipboard;
-exports.__endComposition = endComposition;
-//# sourceMappingURL=index.js.map
+
+//# sourceMappingURL=index.es.js.map
 
 
 /***/ }),
 
-/***/ "./node_modules/rope-sequence/dist/index.js":
-/*!**************************************************!*\
-  !*** ./node_modules/rope-sequence/dist/index.js ***!
-  \**************************************************/
-/*! no static exports found */
-/***/ (function(module, exports) {
+/***/ "./node_modules/rope-sequence/dist/index.es.js":
+/*!*****************************************************!*\
+  !*** ./node_modules/rope-sequence/dist/index.es.js ***!
+  \*****************************************************/
+/*! exports provided: default */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
 
-var GOOD_LEAF_SIZE = 200
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+var GOOD_LEAF_SIZE = 200;
 
 // :: class<T> A rope sequence is a persistent sequence data structure
 // that supports appending, prepending, and slicing without doing a
@@ -57253,7 +57437,7 @@ var RopeSequence = function RopeSequence () {};
 
 RopeSequence.prototype.append = function append (other) {
   if (!other.length) { return this }
-  other = RopeSequence.from(other)
+  other = RopeSequence.from(other);
 
   return (!this.length && other) ||
     (other.length < GOOD_LEAF_SIZE && this.leafAppend(other)) ||
@@ -57299,9 +57483,9 @@ RopeSequence.prototype.forEach = function forEach (f, from, to) {
     if ( to === void 0 ) to = this.length;
 
   if (from <= to)
-    { this.forEachInner(f, from, to, 0) }
+    { this.forEachInner(f, from, to, 0); }
   else
-    { this.forEachInvertedInner(f, from, to, 0) }
+    { this.forEachInvertedInner(f, from, to, 0); }
 };
 
 // :: ((element: T, index: number) → U, ?number, ?number) → [U]
@@ -57311,8 +57495,8 @@ RopeSequence.prototype.map = function map (f, from, to) {
     if ( from === void 0 ) from = 0;
     if ( to === void 0 ) to = this.length;
 
-  var result = []
-  this.forEach(function (elt, i) { return result.push(f(elt, i)); }, from, to)
+  var result = [];
+  this.forEach(function (elt, i) { return result.push(f(elt, i)); }, from, to);
   return result
 };
 
@@ -57324,17 +57508,17 @@ RopeSequence.from = function from (values) {
   return values && values.length ? new Leaf(values) : RopeSequence.empty
 };
 
-var Leaf = (function (RopeSequence) {
+var Leaf = /*@__PURE__*/(function (RopeSequence) {
   function Leaf(values) {
-    RopeSequence.call(this)
-    this.values = values
+    RopeSequence.call(this);
+    this.values = values;
   }
 
   if ( RopeSequence ) Leaf.__proto__ = RopeSequence;
   Leaf.prototype = Object.create( RopeSequence && RopeSequence.prototype );
   Leaf.prototype.constructor = Leaf;
 
-  var prototypeAccessors = { length: {},depth: {} };
+  var prototypeAccessors = { length: { configurable: true },depth: { configurable: true } };
 
   Leaf.prototype.flatten = function flatten () {
     return this.values
@@ -57350,17 +57534,13 @@ var Leaf = (function (RopeSequence) {
   };
 
   Leaf.prototype.forEachInner = function forEachInner (f, from, to, start) {
-    var this$1 = this;
-
     for (var i = from; i < to; i++)
-      { if (f(this$1.values[i], start + i) === false) { return false } }
+      { if (f(this.values[i], start + i) === false) { return false } }
   };
 
   Leaf.prototype.forEachInvertedInner = function forEachInvertedInner (f, from, to, start) {
-    var this$1 = this;
-
     for (var i = from - 1; i >= to; i--)
-      { if (f(this$1.values[i], start + i) === false) { return false } }
+      { if (f(this.values[i], start + i) === false) { return false } }
   };
 
   Leaf.prototype.leafAppend = function leafAppend (other) {
@@ -57384,15 +57564,15 @@ var Leaf = (function (RopeSequence) {
 
 // :: RopeSequence
 // The empty rope sequence.
-RopeSequence.empty = new Leaf([])
+RopeSequence.empty = new Leaf([]);
 
-var Append = (function (RopeSequence) {
+var Append = /*@__PURE__*/(function (RopeSequence) {
   function Append(left, right) {
-    RopeSequence.call(this)
-    this.left = left
-    this.right = right
-    this.length = left.length + right.length
-    this.depth = Math.max(left.depth, right.depth) + 1
+    RopeSequence.call(this);
+    this.left = left;
+    this.right = right;
+    this.length = left.length + right.length;
+    this.depth = Math.max(left.depth, right.depth) + 1;
   }
 
   if ( RopeSequence ) Append.__proto__ = RopeSequence;
@@ -57408,7 +57588,7 @@ var Append = (function (RopeSequence) {
   };
 
   Append.prototype.forEachInner = function forEachInner (f, from, to, start) {
-    var leftLen = this.left.length
+    var leftLen = this.left.length;
     if (from < leftLen &&
         this.left.forEachInner(f, from, Math.min(to, leftLen), start) === false)
       { return false }
@@ -57418,7 +57598,7 @@ var Append = (function (RopeSequence) {
   };
 
   Append.prototype.forEachInvertedInner = function forEachInvertedInner (f, from, to, start) {
-    var leftLen = this.left.length
+    var leftLen = this.left.length;
     if (from > leftLen &&
         this.right.forEachInvertedInner(f, from - leftLen, Math.max(to, leftLen) - leftLen, start + leftLen) === false)
       { return false }
@@ -57429,19 +57609,19 @@ var Append = (function (RopeSequence) {
 
   Append.prototype.sliceInner = function sliceInner (from, to) {
     if (from == 0 && to == this.length) { return this }
-    var leftLen = this.left.length
+    var leftLen = this.left.length;
     if (to <= leftLen) { return this.left.slice(from, to) }
     if (from >= leftLen) { return this.right.slice(from - leftLen, to - leftLen) }
     return this.left.slice(from, leftLen).append(this.right.slice(0, to - leftLen))
   };
 
   Append.prototype.leafAppend = function leafAppend (other) {
-    var inner = this.right.leafAppend(other)
+    var inner = this.right.leafAppend(other);
     if (inner) { return new Append(this.left, inner) }
   };
 
   Append.prototype.leafPrepend = function leafPrepend (other) {
-    var inner = this.left.leafPrepend(other)
+    var inner = this.left.leafPrepend(other);
     if (inner) { return new Append(inner, this.right) }
   };
 
@@ -57454,7 +57634,9 @@ var Append = (function (RopeSequence) {
   return Append;
 }(RopeSequence));
 
-module.exports = RopeSequence
+var ropeSequence = RopeSequence;
+
+/* harmony default export */ __webpack_exports__["default"] = (ropeSequence);
 
 
 /***/ }),
@@ -57754,8 +57936,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "toggleList", function() { return toggleList; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "toggleWrap", function() { return toggleWrap; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "updateMark", function() { return updateMark; });
-/* harmony import */ var prosemirror_commands__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! prosemirror-commands */ "./node_modules/prosemirror-commands/dist/commands.js");
-/* harmony import */ var prosemirror_commands__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(prosemirror_commands__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var prosemirror_commands__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! prosemirror-commands */ "./node_modules/prosemirror-commands/dist/index.es.js");
 /* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "autoJoin", function() { return prosemirror_commands__WEBPACK_IMPORTED_MODULE_0__["autoJoin"]; });
 
 /* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "baseKeymap", function() { return prosemirror_commands__WEBPACK_IMPORTED_MODULE_0__["baseKeymap"]; });
@@ -57804,8 +57985,7 @@ __webpack_require__.r(__webpack_exports__);
 
 /* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "wrapIn", function() { return prosemirror_commands__WEBPACK_IMPORTED_MODULE_0__["wrapIn"]; });
 
-/* harmony import */ var prosemirror_schema_list__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! prosemirror-schema-list */ "./node_modules/prosemirror-schema-list/dist/schema-list.js");
-/* harmony import */ var prosemirror_schema_list__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(prosemirror_schema_list__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var prosemirror_schema_list__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! prosemirror-schema-list */ "./node_modules/prosemirror-schema-list/dist/index.es.js");
 /* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "addListNodes", function() { return prosemirror_schema_list__WEBPACK_IMPORTED_MODULE_1__["addListNodes"]; });
 
 /* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "liftListItem", function() { return prosemirror_schema_list__WEBPACK_IMPORTED_MODULE_1__["liftListItem"]; });
@@ -57816,22 +57996,19 @@ __webpack_require__.r(__webpack_exports__);
 
 /* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "wrapInList", function() { return prosemirror_schema_list__WEBPACK_IMPORTED_MODULE_1__["wrapInList"]; });
 
-/* harmony import */ var prosemirror_inputrules__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! prosemirror-inputrules */ "./node_modules/prosemirror-inputrules/dist/index.js");
-/* harmony import */ var prosemirror_inputrules__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(prosemirror_inputrules__WEBPACK_IMPORTED_MODULE_2__);
+/* harmony import */ var prosemirror_inputrules__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! prosemirror-inputrules */ "./node_modules/prosemirror-inputrules/dist/index.es.js");
 /* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "textblockTypeInputRule", function() { return prosemirror_inputrules__WEBPACK_IMPORTED_MODULE_2__["textblockTypeInputRule"]; });
 
 /* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "wrappingInputRule", function() { return prosemirror_inputrules__WEBPACK_IMPORTED_MODULE_2__["wrappingInputRule"]; });
 
-/* harmony import */ var prosemirror_state__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.js");
-/* harmony import */ var prosemirror_state__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(prosemirror_state__WEBPACK_IMPORTED_MODULE_3__);
-/* harmony import */ var prosemirror_model__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.js");
-/* harmony import */ var prosemirror_model__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(prosemirror_model__WEBPACK_IMPORTED_MODULE_4__);
+/* harmony import */ var prosemirror_state__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.es.js");
+/* harmony import */ var prosemirror_model__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.es.js");
 /* harmony import */ var tiptap_utils__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! tiptap-utils */ "./node_modules/tiptap-utils/dist/utils.esm.js");
 /* harmony import */ var prosemirror_utils__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! prosemirror-utils */ "./node_modules/prosemirror-utils/dist/index.js");
 /* harmony import */ var prosemirror_utils__WEBPACK_IMPORTED_MODULE_6___default = /*#__PURE__*/__webpack_require__.n(prosemirror_utils__WEBPACK_IMPORTED_MODULE_6__);
 
     /*!
-    * tiptap-commands v1.12.2
+    * tiptap-commands v1.12.4
     * (c) 2019 Scrumpy UG (limited liability)
     * @license MIT
     */
@@ -57901,7 +58078,7 @@ function markInputRule (regexp, markType, getAttrs) {
 
     if (match[m]) {
       var matchStart = start + match[0].indexOf(match[m - 1]);
-      var matchEnd = matchStart + match[m - 1].length;
+      var matchEnd = matchStart + match[m - 1].length - 1;
       var textStart = matchStart + match[m - 1].lastIndexOf(match[m]);
       var textEnd = textStart + match[m].length;
       var excludedMarks = getMarksBetween(start, end, state).filter(function (item) {
@@ -58345,24 +58522,18 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var tiptap_commands__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! tiptap-commands */ "./node_modules/tiptap-commands/dist/commands.esm.js");
 /* harmony import */ var lowlight_lib_core__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! lowlight/lib/core */ "./node_modules/lowlight/lib/core.js");
 /* harmony import */ var lowlight_lib_core__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(lowlight_lib_core__WEBPACK_IMPORTED_MODULE_2__);
-/* harmony import */ var prosemirror_view__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! prosemirror-view */ "./node_modules/prosemirror-view/dist/index.js");
-/* harmony import */ var prosemirror_view__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(prosemirror_view__WEBPACK_IMPORTED_MODULE_3__);
+/* harmony import */ var prosemirror_view__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! prosemirror-view */ "./node_modules/prosemirror-view/dist/index.es.js");
 /* harmony import */ var prosemirror_utils__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! prosemirror-utils */ "./node_modules/prosemirror-utils/dist/index.js");
 /* harmony import */ var prosemirror_utils__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(prosemirror_utils__WEBPACK_IMPORTED_MODULE_4__);
-/* harmony import */ var prosemirror_state__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.js");
-/* harmony import */ var prosemirror_state__WEBPACK_IMPORTED_MODULE_5___default = /*#__PURE__*/__webpack_require__.n(prosemirror_state__WEBPACK_IMPORTED_MODULE_5__);
-/* harmony import */ var prosemirror_tables__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! prosemirror-tables */ "./node_modules/prosemirror-tables/dist/index.js");
-/* harmony import */ var prosemirror_tables__WEBPACK_IMPORTED_MODULE_6___default = /*#__PURE__*/__webpack_require__.n(prosemirror_tables__WEBPACK_IMPORTED_MODULE_6__);
+/* harmony import */ var prosemirror_state__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.es.js");
+/* harmony import */ var prosemirror_tables__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! prosemirror-tables */ "./node_modules/prosemirror-tables/dist/index.es.js");
 /* harmony import */ var tiptap_utils__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! tiptap-utils */ "./node_modules/tiptap-utils/dist/utils.esm.js");
-/* harmony import */ var prosemirror_transform__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! prosemirror-transform */ "./node_modules/prosemirror-transform/dist/index.js");
-/* harmony import */ var prosemirror_transform__WEBPACK_IMPORTED_MODULE_8___default = /*#__PURE__*/__webpack_require__.n(prosemirror_transform__WEBPACK_IMPORTED_MODULE_8__);
-/* harmony import */ var prosemirror_collab__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! prosemirror-collab */ "./node_modules/prosemirror-collab/dist/collab.js");
-/* harmony import */ var prosemirror_collab__WEBPACK_IMPORTED_MODULE_9___default = /*#__PURE__*/__webpack_require__.n(prosemirror_collab__WEBPACK_IMPORTED_MODULE_9__);
-/* harmony import */ var prosemirror_history__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! prosemirror-history */ "./node_modules/prosemirror-history/dist/history.js");
-/* harmony import */ var prosemirror_history__WEBPACK_IMPORTED_MODULE_10___default = /*#__PURE__*/__webpack_require__.n(prosemirror_history__WEBPACK_IMPORTED_MODULE_10__);
+/* harmony import */ var prosemirror_transform__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! prosemirror-transform */ "./node_modules/tiptap-extensions/node_modules/prosemirror-transform/dist/index.es.js");
+/* harmony import */ var prosemirror_collab__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! prosemirror-collab */ "./node_modules/prosemirror-collab/dist/index.es.js");
+/* harmony import */ var prosemirror_history__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! prosemirror-history */ "./node_modules/prosemirror-history/dist/index.es.js");
 
     /*!
-    * tiptap-extensions v1.28.3
+    * tiptap-extensions v1.28.5
     * (c) 2019 Scrumpy UG (limited liability)
     * @license MIT
     */
@@ -58435,13 +58606,13 @@ function _objectSpread2(target) {
     var source = arguments[i] != null ? arguments[i] : {};
 
     if (i % 2) {
-      ownKeys(source, true).forEach(function (key) {
+      ownKeys(Object(source), true).forEach(function (key) {
         _defineProperty(target, key, source[key]);
       });
     } else if (Object.getOwnPropertyDescriptors) {
       Object.defineProperties(target, Object.getOwnPropertyDescriptors(source));
     } else {
-      ownKeys(source).forEach(function (key) {
+      ownKeys(Object(source)).forEach(function (key) {
         Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key));
       });
     }
@@ -59116,7 +59287,7 @@ function (_Node) {
  * ![Lorem](image.jpg "Ipsum") -> [, "Lorem", "image.jpg", "Ipsum"]
  */
 
-var IMAGE_INPUT_REGEX = /!\[(.+|:?)\]\((\S+)(?:(?:\s+)["'](\S+)["'])?\)/;
+var IMAGE_INPUT_REGEX = /!\[(.+|:?)]\((\S+)(?:(?:\s+)["'](\S+)["'])?\)/;
 
 var Image =
 /*#__PURE__*/
@@ -60716,6 +60887,12 @@ function (_Extension) {
         },
         redo: function redo$1() {
           return prosemirror_history__WEBPACK_IMPORTED_MODULE_10__["redo"];
+        },
+        undoDepth: function undoDepth$1() {
+          return prosemirror_history__WEBPACK_IMPORTED_MODULE_10__["undoDepth"];
+        },
+        redoDepth: function redoDepth$1() {
+          return prosemirror_history__WEBPACK_IMPORTED_MODULE_10__["redoDepth"];
         }
       };
     }
@@ -60765,6 +60942,7 @@ function (_Extension) {
     key: "defaultOptions",
     get: function get() {
       return {
+        emptyEditorClass: 'is-editor-empty',
         emptyNodeClass: 'is-empty',
         emptyNodeText: 'Write something …',
         showOnlyWhenEditable: true,
@@ -60796,6 +60974,7 @@ function (_Extension) {
             var active = editable || !_this.options.showOnlyWhenEditable;
             var anchor = selection.anchor;
             var decorations = [];
+            var isEditorEmpty = doc.textContent.length === 0;
 
             if (!active) {
               return false;
@@ -60803,11 +60982,17 @@ function (_Extension) {
 
             doc.descendants(function (node, pos) {
               var hasAnchor = anchor >= pos && anchor <= pos + node.nodeSize;
-              var isEmpty = node.content.size === 0;
+              var isNodeEmpty = node.content.size === 0;
 
-              if ((hasAnchor || !_this.options.showOnlyCurrent) && isEmpty) {
+              if ((hasAnchor || !_this.options.showOnlyCurrent) && isNodeEmpty) {
+                var classes = [_this.options.emptyNodeClass];
+
+                if (isEditorEmpty) {
+                  classes.push(_this.options.emptyEditorClass);
+                }
+
                 var decoration = prosemirror_view__WEBPACK_IMPORTED_MODULE_3__["Decoration"].node(pos, pos + node.nodeSize, {
-                  class: _this.options.emptyNodeClass,
+                  class: classes.join(' '),
                   'data-empty-text': typeof _this.options.emptyNodeText === 'function' ? _this.options.emptyNodeText(node) : _this.options.emptyNodeText
                 });
                 decorations.push(decoration);
@@ -61175,6 +61360,1728 @@ function (_Extension) {
 
 /***/ }),
 
+/***/ "./node_modules/tiptap-extensions/node_modules/prosemirror-transform/dist/index.es.js":
+/*!********************************************************************************************!*\
+  !*** ./node_modules/tiptap-extensions/node_modules/prosemirror-transform/dist/index.es.js ***!
+  \********************************************************************************************/
+/*! exports provided: AddMarkStep, MapResult, Mapping, RemoveMarkStep, ReplaceAroundStep, ReplaceStep, Step, StepMap, StepResult, Transform, TransformError, canJoin, canSplit, dropPoint, findWrapping, insertPoint, joinPoint, liftTarget, replaceStep */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "AddMarkStep", function() { return AddMarkStep; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "MapResult", function() { return MapResult; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Mapping", function() { return Mapping; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RemoveMarkStep", function() { return RemoveMarkStep; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "ReplaceAroundStep", function() { return ReplaceAroundStep; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "ReplaceStep", function() { return ReplaceStep; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Step", function() { return Step; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "StepMap", function() { return StepMap; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "StepResult", function() { return StepResult; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Transform", function() { return Transform; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "TransformError", function() { return TransformError; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "canJoin", function() { return canJoin; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "canSplit", function() { return canSplit; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "dropPoint", function() { return dropPoint; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "findWrapping", function() { return findWrapping; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "insertPoint", function() { return insertPoint; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "joinPoint", function() { return joinPoint; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "liftTarget", function() { return liftTarget; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "replaceStep", function() { return replaceStep; });
+/* harmony import */ var prosemirror_model__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.es.js");
+
+
+// Mappable:: interface
+// There are several things that positions can be mapped through.
+// Such objects conform to this interface.
+//
+//   map:: (pos: number, assoc: ?number) → number
+//   Map a position through this object. When given, `assoc` (should
+//   be -1 or 1, defaults to 1) determines with which side the
+//   position is associated, which determines in which direction to
+//   move when a chunk of content is inserted at the mapped position.
+//
+//   mapResult:: (pos: number, assoc: ?number) → MapResult
+//   Map a position, and return an object containing additional
+//   information about the mapping. The result's `deleted` field tells
+//   you whether the position was deleted (completely enclosed in a
+//   replaced range) during the mapping. When content on only one side
+//   is deleted, the position itself is only considered deleted when
+//   `assoc` points in the direction of the deleted content.
+
+// Recovery values encode a range index and an offset. They are
+// represented as numbers, because tons of them will be created when
+// mapping, for example, a large number of decorations. The number's
+// lower 16 bits provide the index, the remaining bits the offset.
+//
+// Note: We intentionally don't use bit shift operators to en- and
+// decode these, since those clip to 32 bits, which we might in rare
+// cases want to overflow. A 64-bit float can represent 48-bit
+// integers precisely.
+
+var lower16 = 0xffff;
+var factor16 = Math.pow(2, 16);
+
+function makeRecover(index, offset) { return index + offset * factor16 }
+function recoverIndex(value) { return value & lower16 }
+function recoverOffset(value) { return (value - (value & lower16)) / factor16 }
+
+// ::- An object representing a mapped position with extra
+// information.
+var MapResult = function MapResult(pos, deleted, recover) {
+  if ( deleted === void 0 ) deleted = false;
+  if ( recover === void 0 ) recover = null;
+
+  // :: number The mapped version of the position.
+  this.pos = pos;
+  // :: bool Tells you whether the position was deleted, that is,
+  // whether the step removed its surroundings from the document.
+  this.deleted = deleted;
+  this.recover = recover;
+};
+
+// :: class extends Mappable
+// A map describing the deletions and insertions made by a step, which
+// can be used to find the correspondence between positions in the
+// pre-step version of a document and the same position in the
+// post-step version.
+var StepMap = function StepMap(ranges, inverted) {
+  if ( inverted === void 0 ) inverted = false;
+
+  this.ranges = ranges;
+  this.inverted = inverted;
+};
+
+StepMap.prototype.recover = function recover (value) {
+  var diff = 0, index = recoverIndex(value);
+  if (!this.inverted) { for (var i = 0; i < index; i++)
+    { diff += this.ranges[i * 3 + 2] - this.ranges[i * 3 + 1]; } }
+  return this.ranges[index * 3] + diff + recoverOffset(value)
+};
+
+// : (number, ?number) → MapResult
+StepMap.prototype.mapResult = function mapResult (pos, assoc) {
+  if ( assoc === void 0 ) assoc = 1;
+ return this._map(pos, assoc, false) };
+
+// : (number, ?number) → number
+StepMap.prototype.map = function map (pos, assoc) {
+  if ( assoc === void 0 ) assoc = 1;
+ return this._map(pos, assoc, true) };
+
+StepMap.prototype._map = function _map (pos, assoc, simple) {
+  var diff = 0, oldIndex = this.inverted ? 2 : 1, newIndex = this.inverted ? 1 : 2;
+  for (var i = 0; i < this.ranges.length; i += 3) {
+    var start = this.ranges[i] - (this.inverted ? diff : 0);
+    if (start > pos) { break }
+    var oldSize = this.ranges[i + oldIndex], newSize = this.ranges[i + newIndex], end = start + oldSize;
+    if (pos <= end) {
+      var side = !oldSize ? assoc : pos == start ? -1 : pos == end ? 1 : assoc;
+      var result = start + diff + (side < 0 ? 0 : newSize);
+      if (simple) { return result }
+      var recover = makeRecover(i / 3, pos - start);
+      return new MapResult(result, assoc < 0 ? pos != start : pos != end, recover)
+    }
+    diff += newSize - oldSize;
+  }
+  return simple ? pos + diff : new MapResult(pos + diff)
+};
+
+StepMap.prototype.touches = function touches (pos, recover) {
+  var diff = 0, index = recoverIndex(recover);
+  var oldIndex = this.inverted ? 2 : 1, newIndex = this.inverted ? 1 : 2;
+  for (var i = 0; i < this.ranges.length; i += 3) {
+    var start = this.ranges[i] - (this.inverted ? diff : 0);
+    if (start > pos) { break }
+    var oldSize = this.ranges[i + oldIndex], end = start + oldSize;
+    if (pos <= end && i == index * 3) { return true }
+    diff += this.ranges[i + newIndex] - oldSize;
+  }
+  return false
+};
+
+// :: ((oldStart: number, oldEnd: number, newStart: number, newEnd: number))
+// Calls the given function on each of the changed ranges included in
+// this map.
+StepMap.prototype.forEach = function forEach (f) {
+  var oldIndex = this.inverted ? 2 : 1, newIndex = this.inverted ? 1 : 2;
+  for (var i = 0, diff = 0; i < this.ranges.length; i += 3) {
+    var start = this.ranges[i], oldStart = start - (this.inverted ? diff : 0), newStart = start + (this.inverted ? 0 : diff);
+    var oldSize = this.ranges[i + oldIndex], newSize = this.ranges[i + newIndex];
+    f(oldStart, oldStart + oldSize, newStart, newStart + newSize);
+    diff += newSize - oldSize;
+  }
+};
+
+// :: () → StepMap
+// Create an inverted version of this map. The result can be used to
+// map positions in the post-step document to the pre-step document.
+StepMap.prototype.invert = function invert () {
+  return new StepMap(this.ranges, !this.inverted)
+};
+
+StepMap.prototype.toString = function toString () {
+  return (this.inverted ? "-" : "") + JSON.stringify(this.ranges)
+};
+
+// :: (n: number) → StepMap
+// Create a map that moves all positions by offset `n` (which may be
+// negative). This can be useful when applying steps meant for a
+// sub-document to a larger document, or vice-versa.
+StepMap.offset = function offset (n) {
+  return n == 0 ? StepMap.empty : new StepMap(n < 0 ? [0, -n, 0] : [0, 0, n])
+};
+
+StepMap.empty = new StepMap([]);
+
+// :: class extends Mappable
+// A mapping represents a pipeline of zero or more [step
+// maps](#transform.StepMap). It has special provisions for losslessly
+// handling mapping positions through a series of steps in which some
+// steps are inverted versions of earlier steps. (This comes up when
+// ‘[rebasing](/docs/guide/#transform.rebasing)’ steps for
+// collaboration or history management.)
+var Mapping = function Mapping(maps, mirror, from, to) {
+  // :: [StepMap]
+  // The step maps in this mapping.
+  this.maps = maps || [];
+  // :: number
+  // The starting position in the `maps` array, used when `map` or
+  // `mapResult` is called.
+  this.from = from || 0;
+  // :: number
+  // The end position in the `maps` array.
+  this.to = to == null ? this.maps.length : to;
+  this.mirror = mirror;
+};
+
+// :: (?number, ?number) → Mapping
+// Create a mapping that maps only through a part of this one.
+Mapping.prototype.slice = function slice (from, to) {
+    if ( from === void 0 ) from = 0;
+    if ( to === void 0 ) to = this.maps.length;
+
+  return new Mapping(this.maps, this.mirror, from, to)
+};
+
+Mapping.prototype.copy = function copy () {
+  return new Mapping(this.maps.slice(), this.mirror && this.mirror.slice(), this.from, this.to)
+};
+
+// :: (StepMap, ?number)
+// Add a step map to the end of this mapping. If `mirrors` is
+// given, it should be the index of the step map that is the mirror
+// image of this one.
+Mapping.prototype.appendMap = function appendMap (map, mirrors) {
+  this.to = this.maps.push(map);
+  if (mirrors != null) { this.setMirror(this.maps.length - 1, mirrors); }
+};
+
+// :: (Mapping)
+// Add all the step maps in a given mapping to this one (preserving
+// mirroring information).
+Mapping.prototype.appendMapping = function appendMapping (mapping) {
+  for (var i = 0, startSize = this.maps.length; i < mapping.maps.length; i++) {
+    var mirr = mapping.getMirror(i);
+    this.appendMap(mapping.maps[i], mirr != null && mirr < i ? startSize + mirr : null);
+  }
+};
+
+// :: (number) → ?number
+// Finds the offset of the step map that mirrors the map at the
+// given offset, in this mapping (as per the second argument to
+// `appendMap`).
+Mapping.prototype.getMirror = function getMirror (n) {
+  if (this.mirror) { for (var i = 0; i < this.mirror.length; i++)
+    { if (this.mirror[i] == n) { return this.mirror[i + (i % 2 ? -1 : 1)] } } }
+};
+
+Mapping.prototype.setMirror = function setMirror (n, m) {
+  if (!this.mirror) { this.mirror = []; }
+  this.mirror.push(n, m);
+};
+
+// :: (Mapping)
+// Append the inverse of the given mapping to this one.
+Mapping.prototype.appendMappingInverted = function appendMappingInverted (mapping) {
+  for (var i = mapping.maps.length - 1, totalSize = this.maps.length + mapping.maps.length; i >= 0; i--) {
+    var mirr = mapping.getMirror(i);
+    this.appendMap(mapping.maps[i].invert(), mirr != null && mirr > i ? totalSize - mirr - 1 : null);
+  }
+};
+
+// :: () → Mapping
+// Create an inverted version of this mapping.
+Mapping.prototype.invert = function invert () {
+  var inverse = new Mapping;
+  inverse.appendMappingInverted(this);
+  return inverse
+};
+
+// : (number, ?number) → number
+// Map a position through this mapping.
+Mapping.prototype.map = function map (pos, assoc) {
+    if ( assoc === void 0 ) assoc = 1;
+
+  if (this.mirror) { return this._map(pos, assoc, true) }
+  for (var i = this.from; i < this.to; i++)
+    { pos = this.maps[i].map(pos, assoc); }
+  return pos
+};
+
+// : (number, ?number) → MapResult
+// Map a position through this mapping, returning a mapping
+// result.
+Mapping.prototype.mapResult = function mapResult (pos, assoc) {
+  if ( assoc === void 0 ) assoc = 1;
+ return this._map(pos, assoc, false) };
+
+Mapping.prototype._map = function _map (pos, assoc, simple) {
+  var deleted = false, recoverables = null;
+
+  for (var i = this.from; i < this.to; i++) {
+    var map = this.maps[i], rec = recoverables && recoverables[i];
+    if (rec != null && map.touches(pos, rec)) {
+      pos = map.recover(rec);
+      continue
+    }
+
+    var result = map.mapResult(pos, assoc);
+    if (result.recover != null) {
+      var corr = this.getMirror(i);
+      if (corr != null && corr > i && corr < this.to) {
+        if (result.deleted) {
+          i = corr;
+          pos = this.maps[corr].recover(result.recover);
+          continue
+        } else {
+(recoverables || (recoverables = Object.create(null)))[corr] = result.recover;
+        }
+      }
+    }
+
+    if (result.deleted) { deleted = true; }
+    pos = result.pos;
+  }
+
+  return simple ? pos : new MapResult(pos, deleted)
+};
+
+function TransformError(message) {
+  var err = Error.call(this, message);
+  err.__proto__ = TransformError.prototype;
+  return err
+}
+
+TransformError.prototype = Object.create(Error.prototype);
+TransformError.prototype.constructor = TransformError;
+TransformError.prototype.name = "TransformError";
+
+// ::- Abstraction to build up and track an array of
+// [steps](#transform.Step) representing a document transformation.
+//
+// Most transforming methods return the `Transform` object itself, so
+// that they can be chained.
+var Transform = function Transform(doc) {
+  // :: Node
+  // The current document (the result of applying the steps in the
+  // transform).
+  this.doc = doc;
+  // :: [Step]
+  // The steps in this transform.
+  this.steps = [];
+  // :: [Node]
+  // The documents before each of the steps.
+  this.docs = [];
+  // :: Mapping
+  // A mapping with the maps for each of the steps in this transform.
+  this.mapping = new Mapping;
+};
+
+var prototypeAccessors = { before: { configurable: true },docChanged: { configurable: true } };
+
+// :: Node The starting document.
+prototypeAccessors.before.get = function () { return this.docs.length ? this.docs[0] : this.doc };
+
+// :: (step: Step) → this
+// Apply a new step in this transform, saving the result. Throws an
+// error when the step fails.
+Transform.prototype.step = function step (object) {
+  var result = this.maybeStep(object);
+  if (result.failed) { throw new TransformError(result.failed) }
+  return this
+};
+
+// :: (Step) → StepResult
+// Try to apply a step in this transformation, ignoring it if it
+// fails. Returns the step result.
+Transform.prototype.maybeStep = function maybeStep (step) {
+  var result = step.apply(this.doc);
+  if (!result.failed) { this.addStep(step, result.doc); }
+  return result
+};
+
+// :: bool
+// True when the document has been changed (when there are any
+// steps).
+prototypeAccessors.docChanged.get = function () {
+  return this.steps.length > 0
+};
+
+Transform.prototype.addStep = function addStep (step, doc) {
+  this.docs.push(this.doc);
+  this.steps.push(step);
+  this.mapping.appendMap(step.getMap());
+  this.doc = doc;
+};
+
+Object.defineProperties( Transform.prototype, prototypeAccessors );
+
+function mustOverride() { throw new Error("Override me") }
+
+var stepsByID = Object.create(null);
+
+// ::- A step object represents an atomic change. It generally applies
+// only to the document it was created for, since the positions
+// stored in it will only make sense for that document.
+//
+// New steps are defined by creating classes that extend `Step`,
+// overriding the `apply`, `invert`, `map`, `getMap` and `fromJSON`
+// methods, and registering your class with a unique
+// JSON-serialization identifier using
+// [`Step.jsonID`](#transform.Step^jsonID).
+var Step = function Step () {};
+
+Step.prototype.apply = function apply (_doc) { return mustOverride() };
+
+// :: () → StepMap
+// Get the step map that represents the changes made by this step,
+// and which can be used to transform between positions in the old
+// and the new document.
+Step.prototype.getMap = function getMap () { return StepMap.empty };
+
+// :: (doc: Node) → Step
+// Create an inverted version of this step. Needs the document as it
+// was before the step as argument.
+Step.prototype.invert = function invert (_doc) { return mustOverride() };
+
+// :: (mapping: Mappable) → ?Step
+// Map this step through a mappable thing, returning either a
+// version of that step with its positions adjusted, or `null` if
+// the step was entirely deleted by the mapping.
+Step.prototype.map = function map (_mapping) { return mustOverride() };
+
+// :: (other: Step) → ?Step
+// Try to merge this step with another one, to be applied directly
+// after it. Returns the merged step when possible, null if the
+// steps can't be merged.
+Step.prototype.merge = function merge (_other) { return null };
+
+// :: () → Object
+// Create a JSON-serializeable representation of this step. When
+// defining this for a custom subclass, make sure the result object
+// includes the step type's [JSON id](#transform.Step^jsonID) under
+// the `stepType` property.
+Step.prototype.toJSON = function toJSON () { return mustOverride() };
+
+// :: (Schema, Object) → Step
+// Deserialize a step from its JSON representation. Will call
+// through to the step class' own implementation of this method.
+Step.fromJSON = function fromJSON (schema, json) {
+  if (!json || !json.stepType) { throw new RangeError("Invalid input for Step.fromJSON") }
+  var type = stepsByID[json.stepType];
+  if (!type) { throw new RangeError(("No step type " + (json.stepType) + " defined")) }
+  return type.fromJSON(schema, json)
+};
+
+// :: (string, constructor<Step>)
+// To be able to serialize steps to JSON, each step needs a string
+// ID to attach to its JSON representation. Use this method to
+// register an ID for your step classes. Try to pick something
+// that's unlikely to clash with steps from other modules.
+Step.jsonID = function jsonID (id, stepClass) {
+  if (id in stepsByID) { throw new RangeError("Duplicate use of step JSON ID " + id) }
+  stepsByID[id] = stepClass;
+  stepClass.prototype.jsonID = id;
+  return stepClass
+};
+
+// ::- The result of [applying](#transform.Step.apply) a step. Contains either a
+// new document or a failure value.
+var StepResult = function StepResult(doc, failed) {
+  // :: ?Node The transformed document.
+  this.doc = doc;
+  // :: ?string Text providing information about a failed step.
+  this.failed = failed;
+};
+
+// :: (Node) → StepResult
+// Create a successful step result.
+StepResult.ok = function ok (doc) { return new StepResult(doc, null) };
+
+// :: (string) → StepResult
+// Create a failed step result.
+StepResult.fail = function fail (message) { return new StepResult(null, message) };
+
+// :: (Node, number, number, Slice) → StepResult
+// Call [`Node.replace`](#model.Node.replace) with the given
+// arguments. Create a successful result if it succeeds, and a
+// failed one if it throws a `ReplaceError`.
+StepResult.fromReplace = function fromReplace (doc, from, to, slice) {
+  try {
+    return StepResult.ok(doc.replace(from, to, slice))
+  } catch (e) {
+    if (e instanceof prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["ReplaceError"]) { return StepResult.fail(e.message) }
+    throw e
+  }
+};
+
+// ::- Replace a part of the document with a slice of new content.
+var ReplaceStep = /*@__PURE__*/(function (Step) {
+  function ReplaceStep(from, to, slice, structure) {
+    Step.call(this);
+    this.from = from;
+    this.to = to;
+    this.slice = slice;
+    this.structure = !!structure;
+  }
+
+  if ( Step ) ReplaceStep.__proto__ = Step;
+  ReplaceStep.prototype = Object.create( Step && Step.prototype );
+  ReplaceStep.prototype.constructor = ReplaceStep;
+
+  ReplaceStep.prototype.apply = function apply (doc) {
+    if (this.structure && contentBetween(doc, this.from, this.to))
+      { return StepResult.fail("Structure replace would overwrite content") }
+    return StepResult.fromReplace(doc, this.from, this.to, this.slice)
+  };
+
+  ReplaceStep.prototype.getMap = function getMap () {
+    return new StepMap([this.from, this.to - this.from, this.slice.size])
+  };
+
+  ReplaceStep.prototype.invert = function invert (doc) {
+    return new ReplaceStep(this.from, this.from + this.slice.size, doc.slice(this.from, this.to))
+  };
+
+  ReplaceStep.prototype.map = function map (mapping) {
+    var from = mapping.mapResult(this.from, 1), to = mapping.mapResult(this.to, -1);
+    if (from.deleted && to.deleted) { return null }
+    return new ReplaceStep(from.pos, Math.max(from.pos, to.pos), this.slice)
+  };
+
+  ReplaceStep.prototype.merge = function merge (other) {
+    if (!(other instanceof ReplaceStep) || other.structure != this.structure) { return null }
+
+    if (this.from + this.slice.size == other.from && !this.slice.openEnd && !other.slice.openStart) {
+      var slice = this.slice.size + other.slice.size == 0 ? prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].empty
+          : new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](this.slice.content.append(other.slice.content), this.slice.openStart, other.slice.openEnd);
+      return new ReplaceStep(this.from, this.to + (other.to - other.from), slice, this.structure)
+    } else if (other.to == this.from && !this.slice.openStart && !other.slice.openEnd) {
+      var slice$1 = this.slice.size + other.slice.size == 0 ? prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].empty
+          : new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](other.slice.content.append(this.slice.content), other.slice.openStart, this.slice.openEnd);
+      return new ReplaceStep(other.from, this.to, slice$1, this.structure)
+    } else {
+      return null
+    }
+  };
+
+  ReplaceStep.prototype.toJSON = function toJSON () {
+    var json = {stepType: "replace", from: this.from, to: this.to};
+    if (this.slice.size) { json.slice = this.slice.toJSON(); }
+    if (this.structure) { json.structure = true; }
+    return json
+  };
+
+  ReplaceStep.fromJSON = function fromJSON (schema, json) {
+    if (typeof json.from != "number" || typeof json.to != "number")
+      { throw new RangeError("Invalid input for ReplaceStep.fromJSON") }
+    return new ReplaceStep(json.from, json.to, prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].fromJSON(schema, json.slice), !!json.structure)
+  };
+
+  return ReplaceStep;
+}(Step));
+
+Step.jsonID("replace", ReplaceStep);
+
+// ::- Replace a part of the document with a slice of content, but
+// preserve a range of the replaced content by moving it into the
+// slice.
+var ReplaceAroundStep = /*@__PURE__*/(function (Step) {
+  function ReplaceAroundStep(from, to, gapFrom, gapTo, slice, insert, structure) {
+    Step.call(this);
+    this.from = from;
+    this.to = to;
+    this.gapFrom = gapFrom;
+    this.gapTo = gapTo;
+    this.slice = slice;
+    this.insert = insert;
+    this.structure = !!structure;
+  }
+
+  if ( Step ) ReplaceAroundStep.__proto__ = Step;
+  ReplaceAroundStep.prototype = Object.create( Step && Step.prototype );
+  ReplaceAroundStep.prototype.constructor = ReplaceAroundStep;
+
+  ReplaceAroundStep.prototype.apply = function apply (doc) {
+    if (this.structure && (contentBetween(doc, this.from, this.gapFrom) ||
+                           contentBetween(doc, this.gapTo, this.to)))
+      { return StepResult.fail("Structure gap-replace would overwrite content") }
+
+    var gap = doc.slice(this.gapFrom, this.gapTo);
+    if (gap.openStart || gap.openEnd)
+      { return StepResult.fail("Gap is not a flat range") }
+    var inserted = this.slice.insertAt(this.insert, gap.content);
+    if (!inserted) { return StepResult.fail("Content does not fit in gap") }
+    return StepResult.fromReplace(doc, this.from, this.to, inserted)
+  };
+
+  ReplaceAroundStep.prototype.getMap = function getMap () {
+    return new StepMap([this.from, this.gapFrom - this.from, this.insert,
+                        this.gapTo, this.to - this.gapTo, this.slice.size - this.insert])
+  };
+
+  ReplaceAroundStep.prototype.invert = function invert (doc) {
+    var gap = this.gapTo - this.gapFrom;
+    return new ReplaceAroundStep(this.from, this.from + this.slice.size + gap,
+                                 this.from + this.insert, this.from + this.insert + gap,
+                                 doc.slice(this.from, this.to).removeBetween(this.gapFrom - this.from, this.gapTo - this.from),
+                                 this.gapFrom - this.from, this.structure)
+  };
+
+  ReplaceAroundStep.prototype.map = function map (mapping) {
+    var from = mapping.mapResult(this.from, 1), to = mapping.mapResult(this.to, -1);
+    var gapFrom = mapping.map(this.gapFrom, -1), gapTo = mapping.map(this.gapTo, 1);
+    if ((from.deleted && to.deleted) || gapFrom < from.pos || gapTo > to.pos) { return null }
+    return new ReplaceAroundStep(from.pos, to.pos, gapFrom, gapTo, this.slice, this.insert, this.structure)
+  };
+
+  ReplaceAroundStep.prototype.toJSON = function toJSON () {
+    var json = {stepType: "replaceAround", from: this.from, to: this.to,
+                gapFrom: this.gapFrom, gapTo: this.gapTo, insert: this.insert};
+    if (this.slice.size) { json.slice = this.slice.toJSON(); }
+    if (this.structure) { json.structure = true; }
+    return json
+  };
+
+  ReplaceAroundStep.fromJSON = function fromJSON (schema, json) {
+    if (typeof json.from != "number" || typeof json.to != "number" ||
+        typeof json.gapFrom != "number" || typeof json.gapTo != "number" || typeof json.insert != "number")
+      { throw new RangeError("Invalid input for ReplaceAroundStep.fromJSON") }
+    return new ReplaceAroundStep(json.from, json.to, json.gapFrom, json.gapTo,
+                                 prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].fromJSON(schema, json.slice), json.insert, !!json.structure)
+  };
+
+  return ReplaceAroundStep;
+}(Step));
+
+Step.jsonID("replaceAround", ReplaceAroundStep);
+
+function contentBetween(doc, from, to) {
+  var $from = doc.resolve(from), dist = to - from, depth = $from.depth;
+  while (dist > 0 && depth > 0 && $from.indexAfter(depth) == $from.node(depth).childCount) {
+    depth--;
+    dist--;
+  }
+  if (dist > 0) {
+    var next = $from.node(depth).maybeChild($from.indexAfter(depth));
+    while (dist > 0) {
+      if (!next || next.isLeaf) { return true }
+      next = next.firstChild;
+      dist--;
+    }
+  }
+  return false
+}
+
+function canCut(node, start, end) {
+  return (start == 0 || node.canReplace(start, node.childCount)) &&
+    (end == node.childCount || node.canReplace(0, end))
+}
+
+// :: (NodeRange) → ?number
+// Try to find a target depth to which the content in the given range
+// can be lifted. Will not go across
+// [isolating](#model.NodeSpec.isolating) parent nodes.
+function liftTarget(range) {
+  var parent = range.parent;
+  var content = parent.content.cutByIndex(range.startIndex, range.endIndex);
+  for (var depth = range.depth;; --depth) {
+    var node = range.$from.node(depth);
+    var index = range.$from.index(depth), endIndex = range.$to.indexAfter(depth);
+    if (depth < range.depth && node.canReplace(index, endIndex, content))
+      { return depth }
+    if (depth == 0 || node.type.spec.isolating || !canCut(node, index, endIndex)) { break }
+  }
+}
+
+// :: (NodeRange, number) → this
+// Split the content in the given range off from its parent, if there
+// is sibling content before or after it, and move it up the tree to
+// the depth specified by `target`. You'll probably want to use
+// [`liftTarget`](#transform.liftTarget) to compute `target`, to make
+// sure the lift is valid.
+Transform.prototype.lift = function(range, target) {
+  var $from = range.$from;
+  var $to = range.$to;
+  var depth = range.depth;
+
+  var gapStart = $from.before(depth + 1), gapEnd = $to.after(depth + 1);
+  var start = gapStart, end = gapEnd;
+
+  var before = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, openStart = 0;
+  for (var d = depth, splitting = false; d > target; d--)
+    { if (splitting || $from.index(d) > 0) {
+      splitting = true;
+      before = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from($from.node(d).copy(before));
+      openStart++;
+    } else {
+      start--;
+    } }
+  var after = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, openEnd = 0;
+  for (var d$1 = depth, splitting$1 = false; d$1 > target; d$1--)
+    { if (splitting$1 || $to.after(d$1 + 1) < $to.end(d$1)) {
+      splitting$1 = true;
+      after = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from($to.node(d$1).copy(after));
+      openEnd++;
+    } else {
+      end++;
+    } }
+
+  return this.step(new ReplaceAroundStep(start, end, gapStart, gapEnd,
+                                         new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](before.append(after), openStart, openEnd),
+                                         before.size - openStart, true))
+};
+
+// :: (NodeRange, NodeType, ?Object, ?NodeRange) → ?[{type: NodeType, attrs: ?Object}]
+// Try to find a valid way to wrap the content in the given range in a
+// node of the given type. May introduce extra nodes around and inside
+// the wrapper node, if necessary. Returns null if no valid wrapping
+// could be found. When `innerRange` is given, that range's content is
+// used as the content to fit into the wrapping, instead of the
+// content of `range`.
+function findWrapping(range, nodeType, attrs, innerRange) {
+  if ( innerRange === void 0 ) innerRange = range;
+
+  var around = findWrappingOutside(range, nodeType);
+  var inner = around && findWrappingInside(innerRange, nodeType);
+  if (!inner) { return null }
+  return around.map(withAttrs).concat({type: nodeType, attrs: attrs}).concat(inner.map(withAttrs))
+}
+
+function withAttrs(type) { return {type: type, attrs: null} }
+
+function findWrappingOutside(range, type) {
+  var parent = range.parent;
+  var startIndex = range.startIndex;
+  var endIndex = range.endIndex;
+  var around = parent.contentMatchAt(startIndex).findWrapping(type);
+  if (!around) { return null }
+  var outer = around.length ? around[0] : type;
+  return parent.canReplaceWith(startIndex, endIndex, outer) ? around : null
+}
+
+function findWrappingInside(range, type) {
+  var parent = range.parent;
+  var startIndex = range.startIndex;
+  var endIndex = range.endIndex;
+  var inner = parent.child(startIndex);
+  var inside = type.contentMatch.findWrapping(inner.type);
+  if (!inside) { return null }
+  var lastType = inside.length ? inside[inside.length - 1] : type;
+  var innerMatch = lastType.contentMatch;
+  for (var i = startIndex; innerMatch && i < endIndex; i++)
+    { innerMatch = innerMatch.matchType(parent.child(i).type); }
+  if (!innerMatch || !innerMatch.validEnd) { return null }
+  return inside
+}
+
+// :: (NodeRange, [{type: NodeType, attrs: ?Object}]) → this
+// Wrap the given [range](#model.NodeRange) in the given set of wrappers.
+// The wrappers are assumed to be valid in this position, and should
+// probably be computed with [`findWrapping`](#transform.findWrapping).
+Transform.prototype.wrap = function(range, wrappers) {
+  var content = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty;
+  for (var i = wrappers.length - 1; i >= 0; i--)
+    { content = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from(wrappers[i].type.create(wrappers[i].attrs, content)); }
+
+  var start = range.start, end = range.end;
+  return this.step(new ReplaceAroundStep(start, end, start, end, new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](content, 0, 0), wrappers.length, true))
+};
+
+// :: (number, ?number, NodeType, ?Object) → this
+// Set the type of all textblocks (partly) between `from` and `to` to
+// the given node type with the given attributes.
+Transform.prototype.setBlockType = function(from, to, type, attrs) {
+  var this$1 = this;
+  if ( to === void 0 ) to = from;
+
+  if (!type.isTextblock) { throw new RangeError("Type given to setBlockType should be a textblock") }
+  var mapFrom = this.steps.length;
+  this.doc.nodesBetween(from, to, function (node, pos) {
+    if (node.isTextblock && !node.hasMarkup(type, attrs) && canChangeType(this$1.doc, this$1.mapping.slice(mapFrom).map(pos), type)) {
+      // Ensure all markup that isn't allowed in the new node type is cleared
+      this$1.clearIncompatible(this$1.mapping.slice(mapFrom).map(pos, 1), type);
+      var mapping = this$1.mapping.slice(mapFrom);
+      var startM = mapping.map(pos, 1), endM = mapping.map(pos + node.nodeSize, 1);
+      this$1.step(new ReplaceAroundStep(startM, endM, startM + 1, endM - 1,
+                                      new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from(type.create(attrs, null, node.marks)), 0, 0), 1, true));
+      return false
+    }
+  });
+  return this
+};
+
+function canChangeType(doc, pos, type) {
+  var $pos = doc.resolve(pos), index = $pos.index();
+  return $pos.parent.canReplaceWith(index, index + 1, type)
+}
+
+// :: (number, ?NodeType, ?Object, ?[Mark]) → this
+// Change the type, attributes, and/or marks of the node at `pos`.
+// When `type` isn't given, the existing node type is preserved,
+Transform.prototype.setNodeMarkup = function(pos, type, attrs, marks) {
+  var node = this.doc.nodeAt(pos);
+  if (!node) { throw new RangeError("No node at given position") }
+  if (!type) { type = node.type; }
+  var newNode = type.create(attrs, null, marks || node.marks);
+  if (node.isLeaf)
+    { return this.replaceWith(pos, pos + node.nodeSize, newNode) }
+
+  if (!type.validContent(node.content))
+    { throw new RangeError("Invalid content for node type " + type.name) }
+
+  return this.step(new ReplaceAroundStep(pos, pos + node.nodeSize, pos + 1, pos + node.nodeSize - 1,
+                                         new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from(newNode), 0, 0), 1, true))
+};
+
+// :: (Node, number, number, ?[?{type: NodeType, attrs: ?Object}]) → bool
+// Check whether splitting at the given position is allowed.
+function canSplit(doc, pos, depth, typesAfter) {
+  if ( depth === void 0 ) depth = 1;
+
+  var $pos = doc.resolve(pos), base = $pos.depth - depth;
+  var innerType = (typesAfter && typesAfter[typesAfter.length - 1]) || $pos.parent;
+  if (base < 0 || $pos.parent.type.spec.isolating ||
+      !$pos.parent.canReplace($pos.index(), $pos.parent.childCount) ||
+      !innerType.type.validContent($pos.parent.content.cutByIndex($pos.index(), $pos.parent.childCount)))
+    { return false }
+  for (var d = $pos.depth - 1, i = depth - 2; d > base; d--, i--) {
+    var node = $pos.node(d), index$1 = $pos.index(d);
+    if (node.type.spec.isolating) { return false }
+    var rest = node.content.cutByIndex(index$1, node.childCount);
+    var after = (typesAfter && typesAfter[i]) || node;
+    if (after != node) { rest = rest.replaceChild(0, after.type.create(after.attrs)); }
+    if (!node.canReplace(index$1 + 1, node.childCount) || !after.type.validContent(rest))
+      { return false }
+  }
+  var index = $pos.indexAfter(base);
+  var baseType = typesAfter && typesAfter[0];
+  return $pos.node(base).canReplaceWith(index, index, baseType ? baseType.type : $pos.node(base + 1).type)
+}
+
+// :: (number, ?number, ?[?{type: NodeType, attrs: ?Object}]) → this
+// Split the node at the given position, and optionally, if `depth` is
+// greater than one, any number of nodes above that. By default, the
+// parts split off will inherit the node type of the original node.
+// This can be changed by passing an array of types and attributes to
+// use after the split.
+Transform.prototype.split = function(pos, depth, typesAfter) {
+  if ( depth === void 0 ) depth = 1;
+
+  var $pos = this.doc.resolve(pos), before = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, after = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty;
+  for (var d = $pos.depth, e = $pos.depth - depth, i = depth - 1; d > e; d--, i--) {
+    before = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from($pos.node(d).copy(before));
+    var typeAfter = typesAfter && typesAfter[i];
+    after = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from(typeAfter ? typeAfter.type.create(typeAfter.attrs, after) : $pos.node(d).copy(after));
+  }
+  return this.step(new ReplaceStep(pos, pos, new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](before.append(after), depth, depth), true))
+};
+
+// :: (Node, number) → bool
+// Test whether the blocks before and after a given position can be
+// joined.
+function canJoin(doc, pos) {
+  var $pos = doc.resolve(pos), index = $pos.index();
+  return joinable($pos.nodeBefore, $pos.nodeAfter) &&
+    $pos.parent.canReplace(index, index + 1)
+}
+
+function joinable(a, b) {
+  return a && b && !a.isLeaf && a.canAppend(b)
+}
+
+// :: (Node, number, ?number) → ?number
+// Find an ancestor of the given position that can be joined to the
+// block before (or after if `dir` is positive). Returns the joinable
+// point, if any.
+function joinPoint(doc, pos, dir) {
+  if ( dir === void 0 ) dir = -1;
+
+  var $pos = doc.resolve(pos);
+  for (var d = $pos.depth;; d--) {
+    var before = (void 0), after = (void 0);
+    if (d == $pos.depth) {
+      before = $pos.nodeBefore;
+      after = $pos.nodeAfter;
+    } else if (dir > 0) {
+      before = $pos.node(d + 1);
+      after = $pos.node(d).maybeChild($pos.index(d) + 1);
+    } else {
+      before = $pos.node(d).maybeChild($pos.index(d) - 1);
+      after = $pos.node(d + 1);
+    }
+    if (before && !before.isTextblock && joinable(before, after)) { return pos }
+    if (d == 0) { break }
+    pos = dir < 0 ? $pos.before(d) : $pos.after(d);
+  }
+}
+
+// :: (number, ?number) → this
+// Join the blocks around the given position. If depth is 2, their
+// last and first siblings are also joined, and so on.
+Transform.prototype.join = function(pos, depth) {
+  if ( depth === void 0 ) depth = 1;
+
+  var step = new ReplaceStep(pos - depth, pos + depth, prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].empty, true);
+  return this.step(step)
+};
+
+// :: (Node, number, NodeType) → ?number
+// Try to find a point where a node of the given type can be inserted
+// near `pos`, by searching up the node hierarchy when `pos` itself
+// isn't a valid place but is at the start or end of a node. Return
+// null if no position was found.
+function insertPoint(doc, pos, nodeType) {
+  var $pos = doc.resolve(pos);
+  if ($pos.parent.canReplaceWith($pos.index(), $pos.index(), nodeType)) { return pos }
+
+  if ($pos.parentOffset == 0)
+    { for (var d = $pos.depth - 1; d >= 0; d--) {
+      var index = $pos.index(d);
+      if ($pos.node(d).canReplaceWith(index, index, nodeType)) { return $pos.before(d + 1) }
+      if (index > 0) { return null }
+    } }
+  if ($pos.parentOffset == $pos.parent.content.size)
+    { for (var d$1 = $pos.depth - 1; d$1 >= 0; d$1--) {
+      var index$1 = $pos.indexAfter(d$1);
+      if ($pos.node(d$1).canReplaceWith(index$1, index$1, nodeType)) { return $pos.after(d$1 + 1) }
+      if (index$1 < $pos.node(d$1).childCount) { return null }
+    } }
+}
+
+// :: (Node, number, Slice) → ?number
+// Finds a position at or around the given position where the given
+// slice can be inserted. Will look at parent nodes' nearest boundary
+// and try there, even if the original position wasn't directly at the
+// start or end of that node. Returns null when no position was found.
+function dropPoint(doc, pos, slice) {
+  var $pos = doc.resolve(pos);
+  if (!slice.content.size) { return pos }
+  var content = slice.content;
+  for (var i = 0; i < slice.openStart; i++) { content = content.firstChild.content; }
+  for (var pass = 1; pass <= (slice.openStart == 0 && slice.size ? 2 : 1); pass++) {
+    for (var d = $pos.depth; d >= 0; d--) {
+      var bias = d == $pos.depth ? 0 : $pos.pos <= ($pos.start(d + 1) + $pos.end(d + 1)) / 2 ? -1 : 1;
+      var insertPos = $pos.index(d) + (bias > 0 ? 1 : 0);
+      if (pass == 1
+          ? $pos.node(d).canReplace(insertPos, insertPos, content)
+          : $pos.node(d).contentMatchAt(insertPos).findWrapping(content.firstChild.type))
+        { return bias == 0 ? $pos.pos : bias < 0 ? $pos.before(d + 1) : $pos.after(d + 1) }
+    }
+  }
+  return null
+}
+
+function mapFragment(fragment, f, parent) {
+  var mapped = [];
+  for (var i = 0; i < fragment.childCount; i++) {
+    var child = fragment.child(i);
+    if (child.content.size) { child = child.copy(mapFragment(child.content, f, child)); }
+    if (child.isInline) { child = f(child, parent, i); }
+    mapped.push(child);
+  }
+  return prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].fromArray(mapped)
+}
+
+// ::- Add a mark to all inline content between two positions.
+var AddMarkStep = /*@__PURE__*/(function (Step) {
+  function AddMarkStep(from, to, mark) {
+    Step.call(this);
+    this.from = from;
+    this.to = to;
+    this.mark = mark;
+  }
+
+  if ( Step ) AddMarkStep.__proto__ = Step;
+  AddMarkStep.prototype = Object.create( Step && Step.prototype );
+  AddMarkStep.prototype.constructor = AddMarkStep;
+
+  AddMarkStep.prototype.apply = function apply (doc) {
+    var this$1 = this;
+
+    var oldSlice = doc.slice(this.from, this.to), $from = doc.resolve(this.from);
+    var parent = $from.node($from.sharedDepth(this.to));
+    var slice = new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](mapFragment(oldSlice.content, function (node, parent) {
+      if (!parent.type.allowsMarkType(this$1.mark.type)) { return node }
+      return node.mark(this$1.mark.addToSet(node.marks))
+    }, parent), oldSlice.openStart, oldSlice.openEnd);
+    return StepResult.fromReplace(doc, this.from, this.to, slice)
+  };
+
+  AddMarkStep.prototype.invert = function invert () {
+    return new RemoveMarkStep(this.from, this.to, this.mark)
+  };
+
+  AddMarkStep.prototype.map = function map (mapping) {
+    var from = mapping.mapResult(this.from, 1), to = mapping.mapResult(this.to, -1);
+    if (from.deleted && to.deleted || from.pos >= to.pos) { return null }
+    return new AddMarkStep(from.pos, to.pos, this.mark)
+  };
+
+  AddMarkStep.prototype.merge = function merge (other) {
+    if (other instanceof AddMarkStep &&
+        other.mark.eq(this.mark) &&
+        this.from <= other.to && this.to >= other.from)
+      { return new AddMarkStep(Math.min(this.from, other.from),
+                             Math.max(this.to, other.to), this.mark) }
+  };
+
+  AddMarkStep.prototype.toJSON = function toJSON () {
+    return {stepType: "addMark", mark: this.mark.toJSON(),
+            from: this.from, to: this.to}
+  };
+
+  AddMarkStep.fromJSON = function fromJSON (schema, json) {
+    if (typeof json.from != "number" || typeof json.to != "number")
+      { throw new RangeError("Invalid input for AddMarkStep.fromJSON") }
+    return new AddMarkStep(json.from, json.to, schema.markFromJSON(json.mark))
+  };
+
+  return AddMarkStep;
+}(Step));
+
+Step.jsonID("addMark", AddMarkStep);
+
+// ::- Remove a mark from all inline content between two positions.
+var RemoveMarkStep = /*@__PURE__*/(function (Step) {
+  function RemoveMarkStep(from, to, mark) {
+    Step.call(this);
+    this.from = from;
+    this.to = to;
+    this.mark = mark;
+  }
+
+  if ( Step ) RemoveMarkStep.__proto__ = Step;
+  RemoveMarkStep.prototype = Object.create( Step && Step.prototype );
+  RemoveMarkStep.prototype.constructor = RemoveMarkStep;
+
+  RemoveMarkStep.prototype.apply = function apply (doc) {
+    var this$1 = this;
+
+    var oldSlice = doc.slice(this.from, this.to);
+    var slice = new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](mapFragment(oldSlice.content, function (node) {
+      return node.mark(this$1.mark.removeFromSet(node.marks))
+    }), oldSlice.openStart, oldSlice.openEnd);
+    return StepResult.fromReplace(doc, this.from, this.to, slice)
+  };
+
+  RemoveMarkStep.prototype.invert = function invert () {
+    return new AddMarkStep(this.from, this.to, this.mark)
+  };
+
+  RemoveMarkStep.prototype.map = function map (mapping) {
+    var from = mapping.mapResult(this.from, 1), to = mapping.mapResult(this.to, -1);
+    if (from.deleted && to.deleted || from.pos >= to.pos) { return null }
+    return new RemoveMarkStep(from.pos, to.pos, this.mark)
+  };
+
+  RemoveMarkStep.prototype.merge = function merge (other) {
+    if (other instanceof RemoveMarkStep &&
+        other.mark.eq(this.mark) &&
+        this.from <= other.to && this.to >= other.from)
+      { return new RemoveMarkStep(Math.min(this.from, other.from),
+                                Math.max(this.to, other.to), this.mark) }
+  };
+
+  RemoveMarkStep.prototype.toJSON = function toJSON () {
+    return {stepType: "removeMark", mark: this.mark.toJSON(),
+            from: this.from, to: this.to}
+  };
+
+  RemoveMarkStep.fromJSON = function fromJSON (schema, json) {
+    if (typeof json.from != "number" || typeof json.to != "number")
+      { throw new RangeError("Invalid input for RemoveMarkStep.fromJSON") }
+    return new RemoveMarkStep(json.from, json.to, schema.markFromJSON(json.mark))
+  };
+
+  return RemoveMarkStep;
+}(Step));
+
+Step.jsonID("removeMark", RemoveMarkStep);
+
+// :: (number, number, Mark) → this
+// Add the given mark to the inline content between `from` and `to`.
+Transform.prototype.addMark = function(from, to, mark) {
+  var this$1 = this;
+
+  var removed = [], added = [], removing = null, adding = null;
+  this.doc.nodesBetween(from, to, function (node, pos, parent) {
+    if (!node.isInline) { return }
+    var marks = node.marks;
+    if (!mark.isInSet(marks) && parent.type.allowsMarkType(mark.type)) {
+      var start = Math.max(pos, from), end = Math.min(pos + node.nodeSize, to);
+      var newSet = mark.addToSet(marks);
+
+      for (var i = 0; i < marks.length; i++) {
+        if (!marks[i].isInSet(newSet)) {
+          if (removing && removing.to == start && removing.mark.eq(marks[i]))
+            { removing.to = end; }
+          else
+            { removed.push(removing = new RemoveMarkStep(start, end, marks[i])); }
+        }
+      }
+
+      if (adding && adding.to == start)
+        { adding.to = end; }
+      else
+        { added.push(adding = new AddMarkStep(start, end, mark)); }
+    }
+  });
+
+  removed.forEach(function (s) { return this$1.step(s); });
+  added.forEach(function (s) { return this$1.step(s); });
+  return this
+};
+
+// :: (number, number, ?union<Mark, MarkType>) → this
+// Remove marks from inline nodes between `from` and `to`. When `mark`
+// is a single mark, remove precisely that mark. When it is a mark type,
+// remove all marks of that type. When it is null, remove all marks of
+// any type.
+Transform.prototype.removeMark = function(from, to, mark) {
+  var this$1 = this;
+  if ( mark === void 0 ) mark = null;
+
+  var matched = [], step = 0;
+  this.doc.nodesBetween(from, to, function (node, pos) {
+    if (!node.isInline) { return }
+    step++;
+    var toRemove = null;
+    if (mark instanceof prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["MarkType"]) {
+      var found = mark.isInSet(node.marks);
+      if (found) { toRemove = [found]; }
+    } else if (mark) {
+      if (mark.isInSet(node.marks)) { toRemove = [mark]; }
+    } else {
+      toRemove = node.marks;
+    }
+    if (toRemove && toRemove.length) {
+      var end = Math.min(pos + node.nodeSize, to);
+      for (var i = 0; i < toRemove.length; i++) {
+        var style = toRemove[i], found$1 = (void 0);
+        for (var j = 0; j < matched.length; j++) {
+          var m = matched[j];
+          if (m.step == step - 1 && style.eq(matched[j].style)) { found$1 = m; }
+        }
+        if (found$1) {
+          found$1.to = end;
+          found$1.step = step;
+        } else {
+          matched.push({style: style, from: Math.max(pos, from), to: end, step: step});
+        }
+      }
+    }
+  });
+  matched.forEach(function (m) { return this$1.step(new RemoveMarkStep(m.from, m.to, m.style)); });
+  return this
+};
+
+// :: (number, NodeType, ?ContentMatch) → this
+// Removes all marks and nodes from the content of the node at `pos`
+// that don't match the given new parent node type. Accepts an
+// optional starting [content match](#model.ContentMatch) as third
+// argument.
+Transform.prototype.clearIncompatible = function(pos, parentType, match) {
+  if ( match === void 0 ) match = parentType.contentMatch;
+
+  var node = this.doc.nodeAt(pos);
+  var delSteps = [], cur = pos + 1;
+  for (var i = 0; i < node.childCount; i++) {
+    var child = node.child(i), end = cur + child.nodeSize;
+    var allowed = match.matchType(child.type, child.attrs);
+    if (!allowed) {
+      delSteps.push(new ReplaceStep(cur, end, prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].empty));
+    } else {
+      match = allowed;
+      for (var j = 0; j < child.marks.length; j++) { if (!parentType.allowsMarkType(child.marks[j].type))
+        { this.step(new RemoveMarkStep(cur, end, child.marks[j])); } }
+    }
+    cur = end;
+  }
+  if (!match.validEnd) {
+    var fill = match.fillBefore(prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, true);
+    this.replace(cur, cur, new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](fill, 0, 0));
+  }
+  for (var i$1 = delSteps.length - 1; i$1 >= 0; i$1--) { this.step(delSteps[i$1]); }
+  return this
+};
+
+// :: (Node, number, ?number, ?Slice) → ?Step
+// ‘Fit’ a slice into a given position in the document, producing a
+// [step](#transform.Step) that inserts it. Will return null if
+// there's no meaningful way to insert the slice here, or inserting it
+// would be a no-op (an empty slice over an empty range).
+function replaceStep(doc, from, to, slice) {
+  if ( to === void 0 ) to = from;
+  if ( slice === void 0 ) slice = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].empty;
+
+  if (from == to && !slice.size) { return null }
+
+  var $from = doc.resolve(from), $to = doc.resolve(to);
+  // Optimization -- avoid work if it's obvious that it's not needed.
+  if (fitsTrivially($from, $to, slice)) { return new ReplaceStep(from, to, slice) }
+  var placed = placeSlice($from, slice);
+
+  var fittedLeft = fitLeft($from, placed);
+  var fitted = fitRight($from, $to, fittedLeft);
+  if (!fitted) { return null }
+  if (fittedLeft.size != fitted.size && canMoveText($from, $to, fittedLeft)) {
+    var d = $to.depth, after = $to.after(d);
+    while (d > 1 && after == $to.end(--d)) { ++after; }
+    var fittedAfter = fitRight($from, doc.resolve(after), fittedLeft);
+    if (fittedAfter)
+      { return new ReplaceAroundStep(from, after, to, $to.end(), fittedAfter, fittedLeft.size) }
+  }
+  return fitted.size || from != to ? new ReplaceStep(from, to, fitted) : null
+}
+
+// :: (number, ?number, ?Slice) → this
+// Replace the part of the document between `from` and `to` with the
+// given `slice`.
+Transform.prototype.replace = function(from, to, slice) {
+  if ( to === void 0 ) to = from;
+  if ( slice === void 0 ) slice = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].empty;
+
+  var step = replaceStep(this.doc, from, to, slice);
+  if (step) { this.step(step); }
+  return this
+};
+
+// :: (number, number, union<Fragment, Node, [Node]>) → this
+// Replace the given range with the given content, which may be a
+// fragment, node, or array of nodes.
+Transform.prototype.replaceWith = function(from, to, content) {
+  return this.replace(from, to, new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from(content), 0, 0))
+};
+
+// :: (number, number) → this
+// Delete the content between the given positions.
+Transform.prototype.delete = function(from, to) {
+  return this.replace(from, to, prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"].empty)
+};
+
+// :: (number, union<Fragment, Node, [Node]>) → this
+// Insert the given content at the given position.
+Transform.prototype.insert = function(pos, content) {
+  return this.replaceWith(pos, pos, content)
+};
+
+
+
+function fitLeftInner($from, depth, placed, placedBelow) {
+  var content = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, openEnd = 0, placedHere = placed[depth];
+  if ($from.depth > depth) {
+    var inner = fitLeftInner($from, depth + 1, placed, placedBelow || placedHere);
+    openEnd = inner.openEnd + 1;
+    content = prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from($from.node(depth + 1).copy(inner.content));
+  }
+
+  if (placedHere) {
+    content = content.append(placedHere.content);
+    openEnd = placedHere.openEnd;
+  }
+  if (placedBelow) {
+    content = content.append($from.node(depth).contentMatchAt($from.indexAfter(depth)).fillBefore(prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, true));
+    openEnd = 0;
+  }
+
+  return {content: content, openEnd: openEnd}
+}
+
+function fitLeft($from, placed) {
+  var ref = fitLeftInner($from, 0, placed, false);
+  var content = ref.content;
+  var openEnd = ref.openEnd;
+  return new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](content, $from.depth, openEnd || 0)
+}
+
+function fitRightJoin(content, parent, $from, $to, depth, openStart, openEnd) {
+  var match, count = content.childCount, matchCount = count - (openEnd > 0 ? 1 : 0);
+  var parentNode = openStart < 0 ? parent : $from.node(depth);
+  if (openStart < 0)
+    { match = parentNode.contentMatchAt(matchCount); }
+  else if (count == 1 && openEnd > 0)
+    { match = parentNode.contentMatchAt(openStart ? $from.index(depth) : $from.indexAfter(depth)); }
+  else
+    { match = parentNode.contentMatchAt($from.indexAfter(depth))
+      .matchFragment(content, count > 0 && openStart ? 1 : 0, matchCount); }
+
+  var toNode = $to.node(depth);
+  if (openEnd > 0 && depth < $to.depth) {
+    var after = toNode.content.cutByIndex($to.indexAfter(depth)).addToStart(content.lastChild);
+    var joinable$1 = match.fillBefore(after, true);
+    // Can't insert content if there's a single node stretched across this gap
+    if (joinable$1 && joinable$1.size && openStart > 0 && count == 1) { joinable$1 = null; }
+
+    if (joinable$1) {
+      var inner = fitRightJoin(content.lastChild.content, content.lastChild, $from, $to,
+                               depth + 1, count == 1 ? openStart - 1 : -1, openEnd - 1);
+      if (inner) {
+        var last = content.lastChild.copy(inner);
+        if (joinable$1.size)
+          { return content.cutByIndex(0, count - 1).append(joinable$1).addToEnd(last) }
+        else
+          { return content.replaceChild(count - 1, last) }
+      }
+    }
+  }
+  if (openEnd > 0)
+    { match = match.matchType((count == 1 && openStart > 0 ? $from.node(depth + 1) : content.lastChild).type); }
+
+  // If we're here, the next level can't be joined, so we see what
+  // happens if we leave it open.
+  var toIndex = $to.index(depth);
+  if (toIndex == toNode.childCount && !toNode.type.compatibleContent(parent.type)) { return null }
+  var joinable = match.fillBefore(toNode.content, true, toIndex);
+  for (var i = toIndex; joinable && i < toNode.content.childCount; i++)
+    { if (!parentNode.type.allowsMarks(toNode.content.child(i).marks)) { joinable = null; } }
+  if (!joinable) { return null }
+
+  if (openEnd > 0) {
+    var closed = fitRightClosed(content.lastChild, openEnd - 1, $from, depth + 1,
+                                count == 1 ? openStart - 1 : -1);
+    content = content.replaceChild(count - 1, closed);
+  }
+  content = content.append(joinable);
+  if ($to.depth > depth)
+    { content = content.addToEnd(fitRightSeparate($to, depth + 1)); }
+  return content
+}
+
+function fitRightClosed(node, openEnd, $from, depth, openStart) {
+  var match, content = node.content, count = content.childCount;
+  if (openStart >= 0)
+    { match = $from.node(depth).contentMatchAt($from.indexAfter(depth))
+      .matchFragment(content, openStart > 0 ? 1 : 0, count); }
+  else
+    { match = node.contentMatchAt(count); }
+
+  if (openEnd > 0) {
+    var closed = fitRightClosed(content.lastChild, openEnd - 1, $from, depth + 1,
+                                count == 1 ? openStart - 1 : -1);
+    content = content.replaceChild(count - 1, closed);
+  }
+
+  return node.copy(content.append(match.fillBefore(prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, true)))
+}
+
+function fitRightSeparate($to, depth) {
+  var node = $to.node(depth);
+  var fill = node.contentMatchAt(0).fillBefore(node.content, true, $to.index(depth));
+  if ($to.depth > depth) { fill = fill.addToEnd(fitRightSeparate($to, depth + 1)); }
+  return node.copy(fill)
+}
+
+function normalizeSlice(content, openStart, openEnd) {
+  while (openStart > 0 && openEnd > 0 && content.childCount == 1) {
+    content = content.firstChild.content;
+    openStart--;
+    openEnd--;
+  }
+  return new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](content, openStart, openEnd)
+}
+
+// : (ResolvedPos, ResolvedPos, number, Slice) → Slice
+function fitRight($from, $to, slice) {
+  var fitted = fitRightJoin(slice.content, $from.node(0), $from, $to, 0, slice.openStart, slice.openEnd);
+  if (!fitted) { return null }
+  return normalizeSlice(fitted, slice.openStart, $to.depth)
+}
+
+function fitsTrivially($from, $to, slice) {
+  return !slice.openStart && !slice.openEnd && $from.start() == $to.start() &&
+    $from.parent.canReplace($from.index(), $to.index(), slice.content)
+}
+
+function canMoveText($from, $to, slice) {
+  if (!$to.parent.isTextblock) { return false }
+
+  var parent = slice.openEnd ? nodeRight(slice.content, slice.openEnd)
+      : $from.node($from.depth - (slice.openStart - slice.openEnd));
+  if (!parent.isTextblock) { return false }
+  for (var i = $to.index(); i < $to.parent.childCount; i++)
+    { if (!parent.type.allowsMarks($to.parent.child(i).marks)) { return false } }
+  var match;
+  if (slice.openEnd) {
+    match = parent.contentMatchAt(parent.childCount);
+  } else {
+    match = parent.contentMatchAt(parent.childCount);
+    if (slice.size) { match = match.matchFragment(slice.content, slice.openStart ? 1 : 0); }
+  }
+  match = match.matchFragment($to.parent.content, $to.index());
+  return match && match.validEnd
+}
+
+function nodeRight(content, depth) {
+  for (var i = 1; i < depth; i++) { content = content.lastChild.content; }
+  return content.lastChild
+}
+
+// Algorithm for 'placing' the elements of a slice into a gap:
+//
+// We consider the content of each node that is open to the left to be
+// independently placeable. I.e. in <p("foo"), p("bar")>, when the
+// paragraph on the left is open, "foo" can be placed (somewhere on
+// the left side of the replacement gap) independently from p("bar").
+//
+// So placeSlice splits up a slice into a number of sub-slices,
+// along with information on where they can be placed on the given
+// left-side edge. It works by walking the open side of the slice,
+// from the inside out, and trying to find a landing spot for each
+// element, by simultaneously scanning over the gap side. When no
+// place is found for an open node's content, it is left in that node.
+
+// : (ResolvedPos, Slice) → [{content: Fragment, openEnd: number, depth: number}]
+function placeSlice($from, slice) {
+  var frontier = new Frontier($from);
+  for (var pass = 1; slice.size && pass <= 3; pass++) {
+    var value = frontier.placeSlice(slice.content, slice.openStart, slice.openEnd, pass);
+    if (pass == 3 && value != slice && value.size) { pass = 0; } // Restart if the 3rd pass made progress but left content
+    slice = value;
+  }
+  while (frontier.open.length) { frontier.closeNode(); }
+  return frontier.placed
+}
+
+// Helper class that models the open side of the insert position,
+// keeping track of the content match and already inserted content
+// at each depth.
+var Frontier = function Frontier($pos) {
+  // : [{parent: Node, match: ContentMatch, content: Fragment, wrapper: bool, openEnd: number, depth: number}]
+  this.open = [];
+  for (var d = 0; d <= $pos.depth; d++) {
+    var parent = $pos.node(d), match = parent.contentMatchAt($pos.indexAfter(d));
+    this.open.push({parent: parent, match: match, content: prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, wrapper: false, openEnd: 0, depth: d});
+  }
+  this.placed = [];
+};
+
+// : (Fragment, number, number, number, ?Node) → Slice
+// Tries to place the content of the given slice, and returns a
+// slice containing unplaced content.
+//
+// pass 1: try to fit directly
+// pass 2: allow wrapper nodes to be introduced
+// pass 3: allow unwrapping of nodes that aren't open
+Frontier.prototype.placeSlice = function placeSlice (fragment, openStart, openEnd, pass, parent) {
+  if (openStart > 0) {
+    var first = fragment.firstChild;
+    var inner = this.placeSlice(first.content, Math.max(0, openStart - 1),
+                                openEnd && fragment.childCount == 1 ? openEnd - 1 : 0,
+                                pass, first);
+    if (inner.content != first.content) {
+      if (inner.content.size) {
+        fragment = fragment.replaceChild(0, first.copy(inner.content));
+        openStart = inner.openStart + 1;
+      } else {
+        if (fragment.childCount == 1) { openEnd = 0; }
+        fragment = fragment.cutByIndex(1);
+        openStart = 0;
+      }
+    }
+  }
+  var result = this.placeContent(fragment, openStart, openEnd, pass, parent);
+  if (pass > 2 && result.size && openStart == 0) {
+    var child = result.content.firstChild, single = result.content.childCount == 1;
+    this.placeContent(child.content, 0, openEnd && single ? openEnd - 1 : 0, pass, child);
+    result = single ? prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty : new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](result.content.cutByIndex(1), 0, openEnd);
+  }
+  return result
+};
+
+Frontier.prototype.placeContent = function placeContent (fragment, openStart, openEnd, pass, parent) {
+  var i = 0;
+  // Go over the fragment's children
+  for (; i < fragment.childCount; i++) {
+    var child = fragment.child(i), placed = false, last = i == fragment.childCount - 1;
+    // Try each open node in turn, starting from the innermost
+    for (var d = this.open.length - 1; d >= 0; d--) {
+      var open = this.open[d], wrap = (void 0);
+
+      // If pass > 1, it is allowed to wrap the node to help find a
+      // fit, so if findWrapping returns something, we add open
+      // nodes to the frontier for that wrapping.
+      if (pass > 1 && (wrap = open.match.findWrapping(child.type)) &&
+          !(parent && wrap.length && wrap[wrap.length - 1] == parent.type)) {
+        while (this.open.length - 1 > d) { this.closeNode(); }
+        for (var w = 0; w < wrap.length; w++) {
+          open.match = open.match.matchType(wrap[w]);
+          d++;
+          open = {parent: wrap[w].create(),
+                  match: wrap[w].contentMatch,
+                  content: prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, wrapper: true, openEnd: 0, depth: d + w};
+          this.open.push(open);
+        }
+      }
+
+      // See if the child fits here
+      var match = open.match.matchType(child.type);
+      if (!match) {
+        var fill = open.match.fillBefore(prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from(child));
+        if (fill) {
+          for (var j = 0; j < fill.childCount; j++) {
+            var ch = fill.child(j);
+            this.addNode(open, ch, 0);
+            match = open.match.matchFragment(ch);
+          }
+        } else if (parent && open.match.matchType(parent.type)) {
+          // Don't continue looking further up if the parent node
+          // would fit here.
+          break
+        } else {
+          continue
+        }
+      }
+
+      // Close open nodes above this one, since we're starting to
+      // add to this.
+      while (this.open.length - 1 > d) { this.closeNode(); }
+      // Strip marks from the child or close its start when necessary
+      child = child.mark(open.parent.type.allowedMarks(child.marks));
+      if (openStart) {
+        child = closeNodeStart(child, openStart, last ? openEnd : 0);
+        openStart = 0;
+      }
+      // Add the child to this open node and adjust its metadata
+      this.addNode(open, child, last ? openEnd : 0);
+      open.match = match;
+      if (last) { openEnd = 0; }
+      placed = true;
+      break
+    }
+    // As soon as we've failed to place a node we stop looking at
+    // later nodes
+    if (!placed) { break }
+  }
+  // Close the current open node if it's not the the root and we
+  // either placed up to the end of the node or the the current
+  // slice depth's node type matches the open node's type
+  if (this.open.length > 1 &&
+      (i > 0 && i == fragment.childCount ||
+       parent && this.open[this.open.length - 1].parent.type == parent.type))
+    { this.closeNode(); }
+
+  return new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](fragment.cutByIndex(i), openStart, openEnd)
+};
+
+Frontier.prototype.addNode = function addNode (open, node, openEnd) {
+  open.content = closeFragmentEnd(open.content, open.openEnd).addToEnd(node);
+  open.openEnd = openEnd;
+};
+
+Frontier.prototype.closeNode = function closeNode () {
+  var open = this.open.pop();
+  if (open.content.size == 0) ; else if (open.wrapper) {
+    this.addNode(this.open[this.open.length - 1], open.parent.copy(open.content), open.openEnd + 1);
+  } else {
+    this.placed[open.depth] = {depth: open.depth, content: open.content, openEnd: open.openEnd};
+  }
+};
+
+function closeNodeStart(node, openStart, openEnd) {
+  var content = node.content;
+  if (openStart > 1) {
+    var first = closeNodeStart(node.firstChild, openStart - 1, node.childCount == 1 ? openEnd - 1 : 0);
+    content = node.content.replaceChild(0, first);
+  }
+  var fill = node.type.contentMatch.fillBefore(content, openEnd == 0);
+  return node.copy(fill.append(content))
+}
+
+function closeNodeEnd(node, depth) {
+  var content = node.content;
+  if (depth > 1) {
+    var last = closeNodeEnd(node.lastChild, depth - 1);
+    content = node.content.replaceChild(node.childCount - 1, last);
+  }
+  var fill = node.contentMatchAt(node.childCount).fillBefore(prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, true);
+  return node.copy(content.append(fill))
+}
+
+function closeFragmentEnd(fragment, depth) {
+  return depth ? fragment.replaceChild(fragment.childCount - 1, closeNodeEnd(fragment.lastChild, depth)) : fragment
+}
+
+// :: (number, number, Slice) → this
+// Replace a range of the document with a given slice, using `from`,
+// `to`, and the slice's [`openStart`](#model.Slice.openStart) property
+// as hints, rather than fixed start and end points. This method may
+// grow the replaced area or close open nodes in the slice in order to
+// get a fit that is more in line with WYSIWYG expectations, by
+// dropping fully covered parent nodes of the replaced region when
+// they are marked [non-defining](#model.NodeSpec.defining), or
+// including an open parent node from the slice that _is_ marked as
+// [defining](#model.NodeSpec.defining).
+//
+// This is the method, for example, to handle paste. The similar
+// [`replace`](#transform.Transform.replace) method is a more
+// primitive tool which will _not_ move the start and end of its given
+// range, and is useful in situations where you need more precise
+// control over what happens.
+Transform.prototype.replaceRange = function(from, to, slice) {
+  if (!slice.size) { return this.deleteRange(from, to) }
+
+  var $from = this.doc.resolve(from), $to = this.doc.resolve(to);
+  if (fitsTrivially($from, $to, slice))
+    { return this.step(new ReplaceStep(from, to, slice)) }
+
+  var targetDepths = coveredDepths($from, this.doc.resolve(to));
+  // Can't replace the whole document, so remove 0 if it's present
+  if (targetDepths[targetDepths.length - 1] == 0) { targetDepths.pop(); }
+  // Negative numbers represent not expansion over the whole node at
+  // that depth, but replacing from $from.before(-D) to $to.pos.
+  var preferredTarget = -($from.depth + 1);
+  targetDepths.unshift(preferredTarget);
+  // This loop picks a preferred target depth, if one of the covering
+  // depths is not outside of a defining node, and adds negative
+  // depths for any depth that has $from at its start and does not
+  // cross a defining node.
+  for (var d = $from.depth, pos = $from.pos - 1; d > 0; d--, pos--) {
+    var spec = $from.node(d).type.spec;
+    if (spec.defining || spec.isolating) { break }
+    if (targetDepths.indexOf(d) > -1) { preferredTarget = d; }
+    else if ($from.before(d) == pos) { targetDepths.splice(1, 0, -d); }
+  }
+  // Try to fit each possible depth of the slice into each possible
+  // target depth, starting with the preferred depths.
+  var preferredTargetIndex = targetDepths.indexOf(preferredTarget);
+
+  var leftNodes = [], preferredDepth = slice.openStart;
+  for (var content = slice.content, i = 0;; i++) {
+    var node = content.firstChild;
+    leftNodes.push(node);
+    if (i == slice.openStart) { break }
+    content = node.content;
+  }
+  // Back up if the node directly above openStart, or the node above
+  // that separated only by a non-defining textblock node, is defining.
+  if (preferredDepth > 0 && leftNodes[preferredDepth - 1].type.spec.defining &&
+      $from.node(preferredTargetIndex).type != leftNodes[preferredDepth - 1].type)
+    { preferredDepth -= 1; }
+  else if (preferredDepth >= 2 && leftNodes[preferredDepth - 1].isTextblock && leftNodes[preferredDepth - 2].type.spec.defining &&
+           $from.node(preferredTargetIndex).type != leftNodes[preferredDepth - 2].type)
+    { preferredDepth -= 2; }
+
+  for (var j = slice.openStart; j >= 0; j--) {
+    var openDepth = (j + preferredDepth + 1) % (slice.openStart + 1);
+    var insert = leftNodes[openDepth];
+    if (!insert) { continue }
+    for (var i$1 = 0; i$1 < targetDepths.length; i$1++) {
+      // Loop over possible expansion levels, starting with the
+      // preferred one
+      var targetDepth = targetDepths[(i$1 + preferredTargetIndex) % targetDepths.length], expand = true;
+      if (targetDepth < 0) { expand = false; targetDepth = -targetDepth; }
+      var parent = $from.node(targetDepth - 1), index = $from.index(targetDepth - 1);
+      if (parent.canReplaceWith(index, index, insert.type, insert.marks))
+        { return this.replace($from.before(targetDepth), expand ? $to.after(targetDepth) : to,
+                            new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](closeFragment(slice.content, 0, slice.openStart, openDepth),
+                                      openDepth, slice.openEnd)) }
+    }
+  }
+
+  var startSteps = this.steps.length;
+  for (var i$2 = targetDepths.length - 1; i$2 >= 0; i$2--) {
+    this.replace(from, to, slice);
+    if (this.steps.length > startSteps) { break }
+    var depth = targetDepths[i$2];
+    if (i$2 < 0) { continue }
+    from = $from.before(depth); to = $to.after(depth);
+  }
+  return this
+};
+
+function closeFragment(fragment, depth, oldOpen, newOpen, parent) {
+  if (depth < oldOpen) {
+    var first = fragment.firstChild;
+    fragment = fragment.replaceChild(0, first.copy(closeFragment(first.content, depth + 1, oldOpen, newOpen, first)));
+  }
+  if (depth > newOpen) {
+    var match = parent.contentMatchAt(0);
+    var start = match.fillBefore(fragment).append(fragment);
+    fragment = start.append(match.matchFragment(start).fillBefore(prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].empty, true));
+  }
+  return fragment
+}
+
+// :: (number, number, Node) → this
+// Replace the given range with a node, but use `from` and `to` as
+// hints, rather than precise positions. When from and to are the same
+// and are at the start or end of a parent node in which the given
+// node doesn't fit, this method may _move_ them out towards a parent
+// that does allow the given node to be placed. When the given range
+// completely covers a parent node, this method may completely replace
+// that parent node.
+Transform.prototype.replaceRangeWith = function(from, to, node) {
+  if (!node.isInline && from == to && this.doc.resolve(from).parent.content.size) {
+    var point = insertPoint(this.doc, from, node.type);
+    if (point != null) { from = to = point; }
+  }
+  return this.replaceRange(from, to, new prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Slice"](prosemirror_model__WEBPACK_IMPORTED_MODULE_0__["Fragment"].from(node), 0, 0))
+};
+
+// :: (number, number) → this
+// Delete the given range, expanding it to cover fully covered
+// parent nodes until a valid replace is found.
+Transform.prototype.deleteRange = function(from, to) {
+  var $from = this.doc.resolve(from), $to = this.doc.resolve(to);
+  var covered = coveredDepths($from, $to);
+  for (var i = 0; i < covered.length; i++) {
+    var depth = covered[i], last = i == covered.length - 1;
+    if ((last && depth == 0) || $from.node(depth).type.contentMatch.validEnd)
+      { return this.delete($from.start(depth), $to.end(depth)) }
+    if (depth > 0 && (last || $from.node(depth - 1).canReplace($from.index(depth - 1), $to.indexAfter(depth - 1))))
+      { return this.delete($from.before(depth), $to.after(depth)) }
+  }
+  for (var d = 1; d <= $from.depth; d++) {
+    if (from - $from.start(d) == $from.depth - d && to > $from.end(d) && $to.end(d) - to != $to.depth - d)
+      { return this.delete($from.before(d), to) }
+  }
+  return this.delete(from, to)
+};
+
+// : (ResolvedPos, ResolvedPos) → [number]
+// Returns an array of all depths for which $from - $to spans the
+// whole content of the nodes at that depth.
+function coveredDepths($from, $to) {
+  var result = [], minDepth = Math.min($from.depth, $to.depth);
+  for (var d = minDepth; d >= 0; d--) {
+    var start = $from.start(d);
+    if (start < $from.pos - ($from.depth - d) ||
+        $to.end(d) > $to.pos + ($to.depth - d) ||
+        $from.node(d).type.spec.isolating ||
+        $to.node(d).type.spec.isolating) { break }
+    if (start == $to.start(d)) { result.push(d); }
+  }
+  return result
+}
+
+
+//# sourceMappingURL=index.es.js.map
+
+
+/***/ }),
+
 /***/ "./node_modules/tiptap-utils/dist/utils.esm.js":
 /*!*****************************************************!*\
   !*** ./node_modules/tiptap-utils/dist/utils.esm.js ***!
@@ -61193,7 +63100,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var prosemirror_utils__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(prosemirror_utils__WEBPACK_IMPORTED_MODULE_0__);
 
     /*!
-    * tiptap-utils v1.8.1
+    * tiptap-utils v1.8.2
     * (c) 2019 Scrumpy UG (limited liability)
     * @license MIT
     */
@@ -61343,8 +63250,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Node", function() { return Node; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Paragraph", function() { return Paragraph; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Text", function() { return Text; });
-/* harmony import */ var prosemirror_state__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.js");
-/* harmony import */ var prosemirror_state__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(prosemirror_state__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var prosemirror_state__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! prosemirror-state */ "./node_modules/prosemirror-state/dist/index.es.js");
 /* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "NodeSelection", function() { return prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["NodeSelection"]; });
 
 /* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "Plugin", function() { return prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["Plugin"]; });
@@ -61353,27 +63259,20 @@ __webpack_require__.r(__webpack_exports__);
 
 /* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "TextSelection", function() { return prosemirror_state__WEBPACK_IMPORTED_MODULE_0__["TextSelection"]; });
 
-/* harmony import */ var prosemirror_view__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! prosemirror-view */ "./node_modules/prosemirror-view/dist/index.js");
-/* harmony import */ var prosemirror_view__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(prosemirror_view__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var prosemirror_model__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.js");
-/* harmony import */ var prosemirror_model__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(prosemirror_model__WEBPACK_IMPORTED_MODULE_2__);
-/* harmony import */ var prosemirror_dropcursor__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! prosemirror-dropcursor */ "./node_modules/prosemirror-dropcursor/dist/dropcursor.js");
-/* harmony import */ var prosemirror_dropcursor__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(prosemirror_dropcursor__WEBPACK_IMPORTED_MODULE_3__);
-/* harmony import */ var prosemirror_gapcursor__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! prosemirror-gapcursor */ "./node_modules/prosemirror-gapcursor/dist/index.js");
-/* harmony import */ var prosemirror_gapcursor__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(prosemirror_gapcursor__WEBPACK_IMPORTED_MODULE_4__);
-/* harmony import */ var prosemirror_keymap__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! prosemirror-keymap */ "./node_modules/prosemirror-keymap/dist/keymap.js");
-/* harmony import */ var prosemirror_keymap__WEBPACK_IMPORTED_MODULE_5___default = /*#__PURE__*/__webpack_require__.n(prosemirror_keymap__WEBPACK_IMPORTED_MODULE_5__);
-/* harmony import */ var prosemirror_commands__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! prosemirror-commands */ "./node_modules/prosemirror-commands/dist/commands.js");
-/* harmony import */ var prosemirror_commands__WEBPACK_IMPORTED_MODULE_6___default = /*#__PURE__*/__webpack_require__.n(prosemirror_commands__WEBPACK_IMPORTED_MODULE_6__);
-/* harmony import */ var prosemirror_inputrules__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! prosemirror-inputrules */ "./node_modules/prosemirror-inputrules/dist/index.js");
-/* harmony import */ var prosemirror_inputrules__WEBPACK_IMPORTED_MODULE_7___default = /*#__PURE__*/__webpack_require__.n(prosemirror_inputrules__WEBPACK_IMPORTED_MODULE_7__);
+/* harmony import */ var prosemirror_view__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! prosemirror-view */ "./node_modules/prosemirror-view/dist/index.es.js");
+/* harmony import */ var prosemirror_model__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! prosemirror-model */ "./node_modules/prosemirror-model/dist/index.es.js");
+/* harmony import */ var prosemirror_dropcursor__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! prosemirror-dropcursor */ "./node_modules/prosemirror-dropcursor/dist/index.es.js");
+/* harmony import */ var prosemirror_gapcursor__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! prosemirror-gapcursor */ "./node_modules/prosemirror-gapcursor/dist/index.es.js");
+/* harmony import */ var prosemirror_keymap__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! prosemirror-keymap */ "./node_modules/prosemirror-keymap/dist/index.es.js");
+/* harmony import */ var prosemirror_commands__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! prosemirror-commands */ "./node_modules/prosemirror-commands/dist/index.es.js");
+/* harmony import */ var prosemirror_inputrules__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! prosemirror-inputrules */ "./node_modules/prosemirror-inputrules/dist/index.es.js");
 /* harmony import */ var tiptap_utils__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! tiptap-utils */ "./node_modules/tiptap-utils/dist/utils.esm.js");
 /* harmony import */ var vue__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! vue */ "./node_modules/vue/dist/vue.common.js");
 /* harmony import */ var vue__WEBPACK_IMPORTED_MODULE_9___default = /*#__PURE__*/__webpack_require__.n(vue__WEBPACK_IMPORTED_MODULE_9__);
 /* harmony import */ var tiptap_commands__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! tiptap-commands */ "./node_modules/tiptap-commands/dist/commands.esm.js");
 
     /*!
-    * tiptap v1.26.3
+    * tiptap v1.26.5
     * (c) 2019 Scrumpy UG (limited liability)
     * @license MIT
     */
@@ -61461,13 +63360,13 @@ function _objectSpread2(target) {
     var source = arguments[i] != null ? arguments[i] : {};
 
     if (i % 2) {
-      ownKeys(source, true).forEach(function (key) {
+      ownKeys(Object(source), true).forEach(function (key) {
         _defineProperty(target, key, source[key]);
       });
     } else if (Object.getOwnPropertyDescriptors) {
       Object.defineProperties(target, Object.getOwnPropertyDescriptors(source));
     } else {
-      ownKeys(source).forEach(function (key) {
+      ownKeys(Object(source)).forEach(function (key) {
         Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key));
       });
     }
@@ -61716,6 +63615,11 @@ function () {
   }, {
     key: "ignoreMutation",
     value: function ignoreMutation(mutation) {
+      // allow leaf nodes to be selected
+      if (mutation.type === 'selection') {
+        return false;
+      }
+
       if (!this.contentDOM) {
         return true;
       }
@@ -63687,14 +65591,30 @@ var render = function() {
                 _c("path", {
                   attrs: {
                     d:
-                      "M14 9.5c0-0.825 0.675-1.5 1.5-1.5h1c0.825 0 1.5 0.675 1.5 1.5v1c0 0.825-0.675 1.5-1.5 1.5h-1c-0.825 0-1.5-0.675-1.5-1.5v-1z"
+                      "M18.5 14h-0.5v-6c0-3.308-2.692-6-6-6h-4c-3.308 0-6 2.692-6 6v6h-0.5c-0.825 0-1.5 0.675-1.5 1.5v15c0 0.825 0.675 1.5 1.5 1.5h17c0.825 0 1.5-0.675 1.5-1.5v-15c0-0.825-0.675-1.5-1.5-1.5zM6 8c0-1.103 0.897-2 2-2h4c1.103 0 2 0.897 2 2v6h-8v-6z"
                   }
-                }),
-                _c("path", { attrs: { d: "M20 24h-8v-2h2v-6h-2v-2h6v8h2z" } }),
+                })
+              ]
+            )
+          ])
+        ]),
+        _vm._v(" "),
+        _c("li", [
+          _c("a", { attrs: { href: "#" }, on: { click: _vm.remove } }, [
+            _c(
+              "svg",
+              { attrs: { width: "32", height: "32", viewBox: "0 0 32 32" } },
+              [
                 _c("path", {
                   attrs: {
                     d:
-                      "M16 0c-8.837 0-16 7.163-16 16s7.163 16 16 16 16-7.163 16-16-7.163-16-16-16zM16 29c-7.18 0-13-5.82-13-13s5.82-13 13-13 13 5.82 13 13-5.82 13-13 13z"
+                      "M4 10v20c0 1.1 0.9 2 2 2h18c1.1 0 2-0.9 2-2v-20h-22zM10 28h-2v-14h2v14zM14 28h-2v-14h2v14zM18 28h-2v-14h2v14zM22 28h-2v-14h2v14z"
+                  }
+                }),
+                _c("path", {
+                  attrs: {
+                    d:
+                      "M26.5 4h-6.5v-2.5c0-0.825-0.675-1.5-1.5-1.5h-7c-0.825 0-1.5 0.675-1.5 1.5v2.5h-6.5c-0.825 0-1.5 0.675-1.5 1.5v2.5h26v-2.5c0-0.825-0.675-1.5-1.5-1.5zM18 4h-6v-1.975h6v1.975z"
                   }
                 })
               ]
@@ -63728,29 +65648,6 @@ var render = function() {
         ]),
         _vm._v(" "),
         _c("li", [
-          _c("a", { attrs: { href: "#" }, on: { click: _vm.remove } }, [
-            _c(
-              "svg",
-              { attrs: { width: "32", height: "32", viewBox: "0 0 32 32" } },
-              [
-                _c("path", {
-                  attrs: {
-                    d:
-                      "M4 10v20c0 1.1 0.9 2 2 2h18c1.1 0 2-0.9 2-2v-20h-22zM10 28h-2v-14h2v14zM14 28h-2v-14h2v14zM18 28h-2v-14h2v14zM22 28h-2v-14h2v14z"
-                  }
-                }),
-                _c("path", {
-                  attrs: {
-                    d:
-                      "M26.5 4h-6.5v-2.5c0-0.825-0.675-1.5-1.5-1.5h-7c-0.825 0-1.5 0.675-1.5 1.5v2.5h-6.5c-0.825 0-1.5 0.675-1.5 1.5v2.5h26v-2.5c0-0.825-0.675-1.5-1.5-1.5zM18 4h-6v-1.975h6v1.975z"
-                  }
-                })
-              ]
-            )
-          ])
-        ]),
-        _vm._v(" "),
-        _c("li", [
           _c("a", { attrs: { href: "#" } }, [
             _c(
               "svg",
@@ -63759,7 +65656,14 @@ var render = function() {
                 _c("path", {
                   attrs: {
                     d:
-                      "M18.5 14h-0.5v-6c0-3.308-2.692-6-6-6h-4c-3.308 0-6 2.692-6 6v6h-0.5c-0.825 0-1.5 0.675-1.5 1.5v15c0 0.825 0.675 1.5 1.5 1.5h17c0.825 0 1.5-0.675 1.5-1.5v-15c0-0.825-0.675-1.5-1.5-1.5zM6 8c0-1.103 0.897-2 2-2h4c1.103 0 2 0.897 2 2v6h-8v-6z"
+                      "M14 9.5c0-0.825 0.675-1.5 1.5-1.5h1c0.825 0 1.5 0.675 1.5 1.5v1c0 0.825-0.675 1.5-1.5 1.5h-1c-0.825 0-1.5-0.675-1.5-1.5v-1z"
+                  }
+                }),
+                _c("path", { attrs: { d: "M20 24h-8v-2h2v-6h-2v-2h6v8h2z" } }),
+                _c("path", {
+                  attrs: {
+                    d:
+                      "M16 0c-8.837 0-16 7.163-16 16s7.163 16 16 16 16-7.163 16-16-7.163-16-16-16zM16 29c-7.18 0-13-5.82-13-13s5.82-13 13-13 13 5.82 13 13-5.82 13-13 13z"
                   }
                 })
               ]
@@ -77966,13 +79870,18 @@ if (false) {} else {
 
 /***/ }),
 
-/***/ "./node_modules/w3c-keyname/index.js":
-/*!*******************************************!*\
-  !*** ./node_modules/w3c-keyname/index.js ***!
-  \*******************************************/
-/*! no static exports found */
-/***/ (function(module, exports) {
+/***/ "./node_modules/w3c-keyname/index.es.js":
+/*!**********************************************!*\
+  !*** ./node_modules/w3c-keyname/index.es.js ***!
+  \**********************************************/
+/*! exports provided: default, base, keyName, shift */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
 
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "base", function() { return base_1; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "keyName", function() { return keyName; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "shift", function() { return shift_1; });
 var base = {
   8: "Backspace",
   9: "Tab",
@@ -78027,8 +79936,8 @@ var base = {
   221: "]",
   222: "'",
   229: "q"
-}
-exports.base = base
+};
+var base_1 = base;
 
 var shift = {
   48: ")",
@@ -78056,49 +79965,58 @@ var shift = {
   221: "}",
   222: "\"",
   229: "Q"
-}
-exports.shift = shift
+};
+var shift_1 = shift;
 
-var chrome = typeof navigator != "undefined" && /Chrome\/(\d+)/.exec(navigator.userAgent)
-var safari = typeof navigator != "undefined" && /Apple Computer/.test(navigator.vendor)
-var gecko = typeof navigator != "undefined" && /Gecko\/\d+/.test(navigator.userAgent)
-var mac = typeof navigator != "undefined" && /Mac/.test(navigator.platform)
-var ie = typeof navigator != "undefined" && /MSIE \d|Trident\/(?:[7-9]|\d{2,})\..*rv:(\d+)/.exec(navigator.userAgent)
-var brokenModifierNames = chrome && (mac || +chrome[1] < 57) || gecko && mac
+var chrome = typeof navigator != "undefined" && /Chrome\/(\d+)/.exec(navigator.userAgent);
+var safari = typeof navigator != "undefined" && /Apple Computer/.test(navigator.vendor);
+var gecko = typeof navigator != "undefined" && /Gecko\/\d+/.test(navigator.userAgent);
+var mac = typeof navigator != "undefined" && /Mac/.test(navigator.platform);
+var ie = typeof navigator != "undefined" && /MSIE \d|Trident\/(?:[7-9]|\d{2,})\..*rv:(\d+)/.exec(navigator.userAgent);
+var brokenModifierNames = chrome && (mac || +chrome[1] < 57) || gecko && mac;
 
 // Fill in the digit keys
-for (var i = 0; i < 10; i++) base[48 + i] = base[96 + i] = String(i)
+for (var i = 0; i < 10; i++) base[48 + i] = base[96 + i] = String(i);
 
 // The function keys
-for (var i = 1; i <= 24; i++) base[i + 111] = "F" + i
+for (var i = 1; i <= 24; i++) base[i + 111] = "F" + i;
 
 // And the alphabetic keys
 for (var i = 65; i <= 90; i++) {
-  base[i] = String.fromCharCode(i + 32)
-  shift[i] = String.fromCharCode(i)
+  base[i] = String.fromCharCode(i + 32);
+  shift[i] = String.fromCharCode(i);
 }
 
 // For each code that doesn't have a shift-equivalent, copy the base name
-for (var code in base) if (!shift.hasOwnProperty(code)) shift[code] = base[code]
+for (var code in base) if (!shift.hasOwnProperty(code)) shift[code] = base[code];
 
-exports.keyName = function(event) {
+var keyName = function(event) {
   // Don't trust event.key in Chrome when there are modifiers until
   // they fix https://bugs.chromium.org/p/chromium/issues/detail?id=633838
   var ignoreKey = brokenModifierNames && (event.ctrlKey || event.altKey || event.metaKey) ||
-    (safari || ie) && event.shiftKey && event.key && event.key.length == 1
+    (safari || ie) && event.shiftKey && event.key && event.key.length == 1;
   var name = (!ignoreKey && event.key) ||
     (event.shiftKey ? shift : base)[event.keyCode] ||
-    event.key || "Unidentified"
+    event.key || "Unidentified";
   // Edge sometimes produces wrong names (Issue #3)
-  if (name == "Esc") name = "Escape"
-  if (name == "Del") name = "Delete"
+  if (name == "Esc") name = "Escape";
+  if (name == "Del") name = "Delete";
   // https://developer.microsoft.com/en-us/microsoft-edge/platform/issues/8860571/
-  if (name == "Left") name = "ArrowLeft"
-  if (name == "Up") name = "ArrowUp"
-  if (name == "Right") name = "ArrowRight"
-  if (name == "Down") name = "ArrowDown"
+  if (name == "Left") name = "ArrowLeft";
+  if (name == "Up") name = "ArrowUp";
+  if (name == "Right") name = "ArrowRight";
+  if (name == "Down") name = "ArrowDown";
   return name
-}
+};
+
+var w3cKeyname = {
+	base: base_1,
+	shift: shift_1,
+	keyName: keyName
+};
+
+/* harmony default export */ __webpack_exports__["default"] = (w3cKeyname);
+
 
 
 /***/ }),

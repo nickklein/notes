@@ -3,8 +3,8 @@
 namespace notes\Http\Controllers;
 
 use Illuminate\Http\Request;
-use notes\Models\Notes;
-use Auth;
+use Illuminate\Support\Facades\Auth;
+use notes\Services\Notes\GetNotes;
 
 class HomeController extends Controller
 {
@@ -23,17 +23,9 @@ class HomeController extends Controller
      *
      * @return \Illuminate\Contracts\Support\Renderable
      */
-    public function index(Request $request)
+    public function index(Request $request, GetNotes $getNotes)
     {
-        $pageid = 0;
-        // If id is passed to the route, then use it, if not get the first in users id;
-        if ($request->id) {
-            $pageid = $request->id;
-        } else {
-            $user_id = Auth::user()->id;
-            $notes = Notes::RelationshipFilter($user_id, '')->first();
-            $pageid = $notes->note_id;
-        }
-        return view('app', ['pageid' => $pageid]);
+        $notes = $getNotes->handle(Auth::user()->id, ['search' => '']);    
+        return view('app', ['pageid' => $notes->first()->note_id]);
     }
 }

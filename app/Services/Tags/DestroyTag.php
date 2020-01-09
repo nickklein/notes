@@ -11,9 +11,9 @@ class DestroyTag
     /**
      * Destroys a single tag from specific user
      *
-     * @return collection
+     * @return object
      */
-    public function single(int $userId, array $fields)
+    public function single(int $userId, array $fields): object
     {
         if (!empty($fields['tag_name'])) {
             $tag = Tags::checkTags($fields['tag_name'])->first();

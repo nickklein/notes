@@ -10,6 +10,7 @@ html, body {
     height: 100%;
     display: flex;
     flex: 1 0 auto;
+    overflow-x: hidden;
 
     @include media-breakpoint-up(md) {
         overflow:hidden;
@@ -20,7 +21,7 @@ html, body {
 .sidebar-wrapper {
     background: $sidebar-bg;
     overflow: hidden;
-    position: fixed;
+    position: absolute;
     top: 0;
     left: 0;
     width: 100%;
@@ -80,16 +81,16 @@ html, body {
             display: block;
             width: 100%;
             padding: 2.1em 1.2em;
+            border-bottom: #dfdfdf 1px solid;
+            
             h5 {
-                font-size: 1em;
-                //font-weight: 600;
-                //margin-bottom: 1.2em;
+                font-size: 1.1em;
             }
             p.caption {
-                font-size: 1em;
+                font-size: 0.9em;
                 color: $sidebar-notes-caption;
                 margin-bottom: 0;
-                line-height: 1.1em;
+                line-height: 1.4em;
             }
             &:hover, &.active {
                 h5, p.caption {
@@ -214,6 +215,9 @@ html, body {
                         height: 100%;
                     }
                 }
+                a.active , a:hover {
+                    fill: $sidebar-link-bg-hover;
+                }
             }
         }
         .account {
@@ -232,6 +236,16 @@ html, body {
                     height: 100%;
                     border-radius: 50%;
                 }
+            }
+        }
+    }
+
+    .account {
+        .dropdown {
+            position: absolute;
+            right: 0;
+            .dropdown-toggle {
+                width: 35px;
             }
         }
     }
@@ -286,6 +300,24 @@ html, body {
         }
         h1,h2,h3 {
             margin-bottom: 0.5em;
+        }
+        pre {
+            padding: .7rem 1rem;
+            border-radius: 5px;
+            background:
+            #000;
+            color:
+            #fff;
+            font-size: .8rem;
+            overflow-x: auto;
+        }
+        blockquote {
+            border-left: 3px solid
+            rgba(0,0,0,.1);
+            color:
+            rgba(0,0,0,.8);
+            padding-left: .8rem;
+            font-style: italic;
         }
 
     }

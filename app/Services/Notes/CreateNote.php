@@ -18,7 +18,7 @@ class CreateNote
         $content = 'Here\'s your paragraph';
 
         $note = new Notes;
-        $note->note_title = $title;
+        $note->note_title = Encryption::encrypt($title);
         $note->note_caption = Encryption::encrypt($content);
         $note->note_content = Encryption::encrypt('<h1>' . $title . '</h1><p>' . $content . '</p>');
         if ($note->save()) {
