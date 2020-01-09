@@ -17,7 +17,7 @@ class UpdateNote
                     ])
                     ->first();
                     
-        $note->note_title = $fields['title'];
+        $note->note_title = Encryption::encrypt($fields['title']);
         if ($fields['caption']) {
             $note->note_caption = Encryption::encrypt($this->shorten($fields['caption']));
         }

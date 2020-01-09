@@ -48,6 +48,7 @@ class GetNotes
         return $items->each(function ($note) use ($pin) {
             $note->pinned = $pin;
 
+            $note->note_title = Encryption::decrypt($note->note_title);
             $note->note_caption = Encryption::decrypt($note->note_caption);
 
             return $note;

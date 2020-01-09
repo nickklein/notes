@@ -7,7 +7,12 @@ use notes\Models\TagsRel;
 
 class CreateTag
 {
-    public function handle(int $userId, array $fields)
+    /**
+     * Create a tag
+     *
+     * @return object
+     */
+    public function handle(int $userId, array $fields): object
     {
         // Check to make sure request wasn't empty
         if (!empty($fields['tag_name'])) {

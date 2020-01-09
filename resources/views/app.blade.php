@@ -12,10 +12,11 @@
         <header class="toolbar">
             <notes-main-toolbar></notes-main-toolbar>
 
-            <div class="account">
+            <div class="account col-xl-3 col-lg-6 col-md-12 col-sm-12">
                 <div class="nav-item dropdown">
                     <a id="navbarDropdown" class="nav-link dropdown-toggle" href="#" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" v-pre>
-                        {{ Auth::user()->email }}<span class="caret"></span>
+                        <img src="/images/profile_full.jpg">
+                        <span class="caret"></span>
                     </a>
 
                     <div class="dropdown-menu dropdown-menu-bottom" aria-labelledby="navbarDropdown">
