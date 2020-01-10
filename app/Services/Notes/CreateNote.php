@@ -4,6 +4,7 @@ namespace notes\Services\Notes;
 
 use notes\Models\Notes;
 use notes\Models\NotesRel;
+use notes\Models\NotesSettingsRel;
 use notes\Services\Encryption;
 
 class CreateNote
@@ -27,6 +28,11 @@ class CreateNote
             $note_rel->user_id = $userId;
             $note_rel->permission = 'admin';
             $note_rel->save();
+
+            $notesSettingsRel = new NotesSettingsRel;
+            $notesSettingsRel->nsetting_id = 1;
+            $notesSettingsRel->note_id = $note->note_id;
+            $notesSettingsRel->save();
         }
     }
 }
