@@ -9,11 +9,11 @@
             </button>
         </div>
         <div class="modal-body">
-            <p><slot></slot></p>
+            <slot name="description"></slot>
             
             <div class="form" v-if="enableModalInput">
                 <div v-for="(item, index) in inputs" :key="index">
-                    <div class="form-group" v-if="item.type != 'checkbox'">
+                    <div class="form-group" v-if="item.type == 'text'">
                             <label>{{item.name}}</label>
                             <input id="email" :type="item.type" :placeholder="item.placeholder" class="form-control" :name="item.name" :value="item.value" v-model="getValue[index]">
 
@@ -36,7 +36,7 @@
             </div>
         </div>
         <div class="modal-footer">
-            <button type="button" class="btn btn-primary" @click="submitForm">{{label}}</button>
+            <button type="button" class="btn btn-primary" v-if="label" @click="submitForm">{{label}}</button>
             <button type="button" class="btn btn-secondary" @click="$emit('close')">Close</button>
         </div>
         </div>

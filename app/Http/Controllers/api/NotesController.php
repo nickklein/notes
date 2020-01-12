@@ -46,15 +46,15 @@ class NotesController extends Controller
     public function show(Request $request): object
     {
         $userId = Auth::user()->id;
-        $notes = Notes::GetNote($userId, $request->id)
-                        ->leftJoin('notes_settings_rel', 'notes_settings_rel.note_id', 'notes.note_id')
-                        ->get();
+
+        $notes = Notes::with('notesSettingsRel')->GetNote($userId, $request->id)->get();
 
         $notes = $notes->each(function ($note) {
-            $note->note_content = NotesHelper::decrypt($note->note_content);
+            $content = NotesHelper::decrypt($note->note_content);
+            $note->note_content = $content;
+            $note->note_word_count = str_word_count($content);
             return $note;
         });
-
         return response()->json($notes);
     }
 
