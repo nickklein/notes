@@ -78,6 +78,7 @@ export default {
               _token: window.Laravel['csrfToken']
           });
           bus.$emit('filterSidebar', '');
+          bus.$emit('updateComponents', pageid);
         }, 300),
 
       }),

@@ -31,10 +31,10 @@
                 title="Information" 
                 v-bind:input="false">
                 <template v-slot:description>
-                        <h5>Created:</h5>
+                        <h6><strong>Created:</strong></h6>
                         <p>{{created_at}}</p>
 
-                        <h5>Word count:</h5>
+                        <h6><strong>Word count:</strong></h6>
                         <p>{{word_count}}</p>
                 </template>
         </static-modal>
@@ -78,7 +78,7 @@
                 }
 
                 // Set Notes Information
-                this.created_at = data.created_at;
+                this.created_at = data.created_at_formated;
                 this.word_count = data.note_word_count;
             },
             pin() {

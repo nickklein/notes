@@ -2016,7 +2016,7 @@ __webpack_require__.r(__webpack_exports__);
       } // Set Notes Information
 
 
-      this.created_at = data.created_at;
+      this.created_at = data.created_at_formated;
       this.word_count = data.note_word_count;
     },
     pin: function pin() {
@@ -2330,6 +2330,7 @@ __webpack_require__.r(__webpack_exports__);
             _token: window.Laravel['csrfToken']
           });
           _app__WEBPACK_IMPORTED_MODULE_1__["bus"].$emit('filterSidebar', '');
+          _app__WEBPACK_IMPORTED_MODULE_1__["bus"].$emit('updateComponents', pageid);
         }, 300)
       })
     };
@@ -65891,11 +65892,11 @@ var render = function() {
                   key: "description",
                   fn: function() {
                     return [
-                      _c("h5", [_vm._v("Created:")]),
+                      _c("h6", [_c("strong", [_vm._v("Created:")])]),
                       _vm._v(" "),
                       _c("p", [_vm._v(_vm._s(_vm.created_at))]),
                       _vm._v(" "),
-                      _c("h5", [_vm._v("Word count:")]),
+                      _c("h6", [_c("strong", [_vm._v("Word count:")])]),
                       _vm._v(" "),
                       _c("p", [_vm._v(_vm._s(_vm.word_count))])
                     ]
@@ -65905,7 +65906,7 @@ var render = function() {
               ],
               null,
               false,
-              1901306574
+              1098014542
             )
           })
         : _vm._e()
