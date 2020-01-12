@@ -78,6 +78,7 @@ export default {
               _token: window.Laravel['csrfToken']
           });
           bus.$emit('filterSidebar', '');
+          bus.$emit('updateComponents', pageid);
         }, 300),
 
       }),
@@ -91,21 +92,22 @@ export default {
        var self = this;
         this.$http.get('/api/note/' + pageid)
         .then(function(response) {
-            var activePin = false;
-            if (response.data[0].nsetting_id !== null && response.data[0].nsetting_id == '2') {
-                activePin = true;
-            }
-            bus.$emit('activePin', activePin);
+            bus.$emit('noteInformation', response.data[0]);
             self.editor.setContent(response.data[0].note_content);
         });
     }
   },
   created() {
-      this.fetch(pageid);
+      var self = this;
+      self.fetch(pageid);
 
       bus.$on('updateComponents', (newid) => {
-          this.fetch(newid);
+          self.fetch(newid);
       });
+
+      setInterval(function(){
+          self.fetch(pageid);
+      }, 900000);
   }
 
 

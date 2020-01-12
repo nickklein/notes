@@ -12,8 +12,12 @@ class Notes extends Model
     //
     protected $table = 'notes';
     protected $primaryKey = 'note_id';
-
     
+    public function notesSettingsRel()
+    {
+        return $this->hasMany('notes\Models\NotesSettingsRel', 'note_id', 'note_id');
+    }
+
     public function scopeNotesRel(Builder $query)
     {
         //return $this->belongsTo('\notes\Models\NotesRel', 'note_id', 'note_id');
