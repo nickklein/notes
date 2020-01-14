@@ -26,7 +26,7 @@ class NotesUpdateRequest extends FormRequest
         return [
             //
             'title' => 'required|string',
-            'caption' => 'required|string',
+            'caption' => 'nullable|string',
             'content' => 'required|string',
             'page_id' => 'required|integer',
         ];
