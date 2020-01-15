@@ -17,9 +17,9 @@ class UpdateNote
                     ])
                     ->first();
                     
-        $note->note_title = Encryption::encrypt($fields['title']);
+        $note->note_title = Encryption::encrypt($this->shorten($fields['title'], 30));
         if ($fields['caption']) {
-            $note->note_caption = Encryption::encrypt($this->shorten($fields['caption']));
+            $note->note_caption = Encryption::encrypt($this->shorten($fields['caption'], 60));
         }
         $note->note_content = Encryption::encrypt($fields['content']);
     
@@ -28,8 +28,8 @@ class UpdateNote
         }
         return false;
     }
-    private static function shorten(string $data): string
+    private static function shorten(string $data, int $length): string
     {
-        return substr(strip_tags($data), 0, 60) . '..';
+        return substr(strip_tags($data), 0, $length) . '..';
     }
 }
