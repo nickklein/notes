@@ -13,6 +13,7 @@ use notes\Http\Requests\Notes\NotesUpdateRequest;
 use notes\Services\Notes\UpdateNote;
 use notes\Services\Notes\DestroyNote;
 use notes\Services\Notes\PinNote;
+use notes\Services\Notes\GetNote;
 use notes\Services\Notes\GetNotes;
 
 
@@ -43,19 +44,10 @@ class NotesController extends Controller
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
-    public function show(Request $request): object
+    public function show(Request $request, GetNote $getNote): object
     {
-        $userId = Auth::user()->id;
+        $notes = $getNote->handle(Auth::user()->id, ['page_id' => $request->page_id]);
 
-        $notes = Notes::with('notesSettingsRel')->GetNote($userId, $request->id)->get();
-
-        $notes = $notes->each(function ($note) {
-            $note->created_at_formated = date("F d, Y, H:i:s", strtotime($note->created_at));
-            $content = NotesHelper::decrypt($note->note_content);
-            $note->note_content = $content;
-            $note->note_word_count = str_word_count($content);
-            return $note;
-        });
         return response()->json($notes);
     }
 
@@ -78,12 +70,14 @@ class NotesController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function update(NotesUpdateRequest $request, UpdateNote $updateNote): object
+    public function update(NotesUpdateRequest $request, UpdateNote $updateNote, GetNote $getNote): object
     {
-        $response = $updateNote->handle(Auth::user()->id, $request->validated());
+        $fields = $request->validated();
+        $response = $updateNote->handle(Auth::user()->id, $fields);
     
         if ($response) {
-            return response()->json(array('success' => true));
+            $notes = $getNote->handle(Auth::user()->id, $request);
+            return response()->json($notes);
         }
         return response()->json(array('success' => false));
     }

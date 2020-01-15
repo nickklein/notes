@@ -2328,9 +2328,10 @@ __webpack_require__.r(__webpack_exports__);
             caption: captionRaw,
             content: getHTML(),
             _token: window.Laravel['csrfToken']
+          }).then(function (response) {
+            _app__WEBPACK_IMPORTED_MODULE_1__["bus"].$emit('noteInformation', response.data[0]);
           });
           _app__WEBPACK_IMPORTED_MODULE_1__["bus"].$emit('filterSidebar', '');
-          _app__WEBPACK_IMPORTED_MODULE_1__["bus"].$emit('updateComponents', pageid);
         }, 300)
       })
     };
@@ -2353,9 +2354,6 @@ __webpack_require__.r(__webpack_exports__);
     _app__WEBPACK_IMPORTED_MODULE_1__["bus"].$on('updateComponents', function (newid) {
       self.fetch(newid);
     });
-    setInterval(function () {
-      self.fetch(pageid);
-    }, 900000);
   }
 });
 

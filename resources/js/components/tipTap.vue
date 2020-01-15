@@ -76,9 +76,11 @@ export default {
               caption: captionRaw,
               content: getHTML(),
               _token: window.Laravel['csrfToken']
-          });
+          })
+			.then(function(response) {
+				bus.$emit('noteInformation', response.data[0]);
+			});
           bus.$emit('filterSidebar', '');
-          bus.$emit('updateComponents', pageid);
         }, 300),
 
       }),
@@ -104,10 +106,6 @@ export default {
       bus.$on('updateComponents', (newid) => {
           self.fetch(newid);
       });
-
-      setInterval(function(){
-          self.fetch(pageid);
-      }, 900000);
   }
 
 

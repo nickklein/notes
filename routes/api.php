@@ -23,7 +23,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/tags/create', 'api\TagsController@store');
 
     // Fetch Notes
-    Route::get('/note/{id}', 'api\NotesController@show');
+    Route::get('/note/{page_id}', 'api\NotesController@show')->where('id', '[0-9]+');
     Route::get('/notes/feed/', 'api\NotesController@index')->name('notesFeed');
     Route::get('/notes/feed/{search}', 'api\NotesController@index')->name('notesFeedFilter');
 
