@@ -47,9 +47,7 @@
                 sidebarContainer.classList.add('slideOutSidebar');
                 mainWrap.classList.remove('slideOutMain');
                 mainWrap.classList.add('slideInMain');
-
-
-            }
+            },
         },
         created: function() {
             this.fetch();
@@ -57,6 +55,11 @@
             bus.$on('filterSidebar', (search) => {
                 this.fetch(search);
             });
+
+            bus.$on('updateComponents', (note_id) => {
+                this.selected = note_id;
+            });
+
         }
 
     }

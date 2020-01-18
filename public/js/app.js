@@ -1786,8 +1786,15 @@ __webpack_require__.r(__webpack_exports__);
     addNote: function addNote() {
       this.$http.post('/api/notes/create', {
         _token: window.Laravel['csrfToken']
+      }).then(function (response) {
+        console.log(response.data);
+
+        if (response.data['success']) {
+          console.log('execute' + response.data['page_id']);
+          _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$emit('updateComponents', response.data['page_id']);
+          _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$emit('filterSidebar', '');
+        }
       });
-      _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$emit('filterSidebar', '');
     }
   }
 });
@@ -2130,6 +2137,9 @@ __webpack_require__.r(__webpack_exports__);
     this.fetch();
     _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$on('filterSidebar', function (search) {
       _this.fetch(search);
+    });
+    _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$on('updateComponents', function (note_id) {
+      _this.selected = note_id;
     });
   }
 });
