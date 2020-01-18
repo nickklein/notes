@@ -26,7 +26,6 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/note/{page_id}', 'api\NotesController@show')->where('id', '[0-9]+');
     Route::get('/notes/feed/', 'api\NotesController@index')->name('notesFeed');
     Route::get('/notes/feed/{search}', 'api\NotesController@index')->name('notesFeedFilter');
-    Route::get('/notes/deleted/', 'api\NotesController@destroyAll')->name('notesFeedDeleted');
 
     Route::post('/notes/create', 'api\NotesController@store');
     Route::post('/notes/remove', 'api\NotesController@destroy');
