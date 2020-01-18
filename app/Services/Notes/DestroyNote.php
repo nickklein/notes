@@ -7,6 +7,7 @@ use notes\Models\NotesSettingsRel;
 use Illuminate\Support\Facades\Auth;
 use notes\Services\Tags\DestroyTag;
 use Illuminate\Support\Carbon;
+use notes\Services\Notes\GetNotes;
 
 class DestroyNote
 {
@@ -33,7 +34,8 @@ class DestroyNote
 
             // Deletes the note here
             if ($note->delete()) {
-                return ['success' => true, 'action' => 'deleted_note'];
+                $notes = (new GetNotes)->handle(Auth::user()->id, ['search' => '']);
+                return ['success' => true, 'action' => 'deleted_note', 'page_id' => $notes->first()->note_id];
             }
         }
         return ['success' => false, 'action' => 'permission_denied'];
