@@ -6,15 +6,11 @@ use notes\Models\Notes;
 use notes\Models\NotesSettingsRel;
 use Illuminate\Support\Facades\Auth;
 use notes\Services\Tags\DestroyTag;
-
+use Illuminate\Support\Carbon;
 
 class DestroyNote
 {
-    protected $destroyTag;
-
-    public function __construct(DestroyTag $destroyTag) {
-        $this->destroyTag = $destroyTag;
-    }
+    CONST EXPIRED_DAYS = 1;
 
     /**
      * Deletes a Note, with its tags
@@ -35,16 +31,26 @@ class DestroyNote
                 return ['success' => false, 'action' => 'last_note'];
             }
 
-            // Remove all tags for the specific note
-            $this->destroyTag->multiple($userId, $fields['page_id']);
-            // Delete related settings etc
-            NotesSettingsRel::where('note_id', $fields['page_id'])->delete();
-
             // Deletes the note here
             if ($note->delete()) {
                 return ['success' => true, 'action' => 'deleted_note'];
             }
         }
         return ['success' => false, 'action' => 'permission_denied'];
+    }
+
+    public function destroyExpired(): void
+    {
+        $notes = Notes::withTrashed()->NotesRel()
+            ->where('deleted_at', '<=', Carbon::now()->subDays(self::EXPIRED_DAYS)->toDateTimeString())
+            ->get();
+        foreach($notes as $note) {
+            // Delete all associated tags
+
+            (new DestroyTag)->multiple($note->user_id, $note->note_id);
+            // Delete related settings etc
+            NotesSettingsRel::where('note_id', $note->note_id)->delete();
+            $note->forceDelete();
+        }
     }
 }

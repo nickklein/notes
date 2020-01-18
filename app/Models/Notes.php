@@ -5,14 +5,18 @@ namespace notes\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 use notes\Models\TagsRel;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 
 class Notes extends Model
 {
     //
+    use SoftDeletes;
+
     protected $table = 'notes';
     protected $primaryKey = 'note_id';
-    
+    protected $dates = ['deleted_at'];
+
     public function notesSettingsRel()
     {
         return $this->hasMany('notes\Models\NotesSettingsRel', 'note_id', 'note_id');
