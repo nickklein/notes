@@ -1788,6 +1788,7 @@ __webpack_require__.r(__webpack_exports__);
         _token: window.Laravel['csrfToken']
       }).then(function (response) {
         if (response.data['success']) {
+          pageid = response.data['page_id'];
           _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$emit('updateComponents', response.data['page_id']);
           _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$emit('filterSidebar', '');
         }
@@ -2047,6 +2048,8 @@ __webpack_require__.r(__webpack_exports__);
         _token: window.Laravel['csrfToken']
       }).then(function (response) {
         if (response.data.success) {
+          pageid = response.data.page_id;
+          _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$emit('updateComponents', response.data.page_id);
           _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$emit('filterSidebar', '');
         }
       });
