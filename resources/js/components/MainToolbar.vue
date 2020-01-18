@@ -99,6 +99,7 @@
                 this.$http.post('/api/notes/remove', {page_id: pageid,_token: window.Laravel['csrfToken']})
                 .then(function(response) {
                     if (response.data.success) {
+                        bus.$emit('updateComponents', response.data.page_id)
                         bus.$emit('filterSidebar', '');
                     }
                 });
