@@ -4,6 +4,7 @@ namespace notes\Console;
 
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
+use notes\Services\Notes\DestroyNote;
 
 class Kernel extends ConsoleKernel
 {
@@ -26,6 +27,11 @@ class Kernel extends ConsoleKernel
     {
         // $schedule->command('inspire')
         //          ->hourly();
+        $schedule->call(function () {
+            // Destroy note using request
+            (new DestroyNote)->destroyExpired();
+        })->daily();
+        
     }
 
     /**
