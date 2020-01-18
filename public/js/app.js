@@ -1787,10 +1787,7 @@ __webpack_require__.r(__webpack_exports__);
       this.$http.post('/api/notes/create', {
         _token: window.Laravel['csrfToken']
       }).then(function (response) {
-        console.log(response.data);
-
         if (response.data['success']) {
-          console.log('execute' + response.data['page_id']);
           _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$emit('updateComponents', response.data['page_id']);
           _app__WEBPACK_IMPORTED_MODULE_0__["bus"].$emit('filterSidebar', '');
         }
