@@ -30,7 +30,7 @@ class Kernel extends ConsoleKernel
         $schedule->call(function () {
             // Destroy note using request
             (new DestroyNote)->destroyExpired();
-        })->everyMinute();
+        })->hourly();
         
     }
 
