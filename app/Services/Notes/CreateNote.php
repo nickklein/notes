@@ -13,7 +13,7 @@ class CreateNote
      * Creates a note, and its relationships
      *
      */
-    public function handle(int $userId): void
+    public function handle(int $userId): int
     {
         $title = 'This is your note';
         $content = 'Here\'s your paragraph';
@@ -33,6 +33,8 @@ class CreateNote
             $notesSettingsRel->nsetting_id = 1;
             $notesSettingsRel->note_id = $note->note_id;
             $notesSettingsRel->save();
+            return $note->note_id;
         }
+        return false;
     }
 }

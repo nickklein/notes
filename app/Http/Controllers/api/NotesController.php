@@ -57,10 +57,14 @@ class NotesController extends Controller
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
-    public function store(Request $request, CreateNote $createNote): void
+    public function store(Request $request, CreateNote $createNote): object
     {
         // Create a note
-        $createNote->handle(Auth::user()->id);
+        $noteId = $createNote->handle(Auth::user()->id);
+        if ($noteId) {
+            return response()->json(array('success' => true, 'action' => 'created', 'page_id' => $noteId));
+        }
+        return response()->json(array('success' => false, 'action' => 'not created')); 
     }
 
     /**
