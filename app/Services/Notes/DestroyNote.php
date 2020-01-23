@@ -4,6 +4,7 @@ namespace notes\Services\Notes;
 
 use notes\Models\Notes;
 use notes\Models\NotesSettingsRel;
+use notes\Models\NotesRel;
 use Illuminate\Support\Facades\Auth;
 use notes\Services\Tags\DestroyTag;
 use Illuminate\Support\Carbon;
@@ -31,11 +32,20 @@ class DestroyNote
             if ($count == 1) {
                 return ['success' => false, 'action' => 'last_note'];
             }
+            // Check if user owns the note, if they do, then delete it all, if not delete only the guest users entry
+            if (!$this->isOwner($note->note_id, Auth::user()->id)) {
+                // Delete specific user, not everyone else.
+                NotesRel::where(['note_id' => $note->note_id], ['user_id' => Auth::user()->id])->delete();
 
-            // Deletes the note here
+                // Redirect to first note after deleting it from the guest user
+                $notes = (new GetNotes)->handle(Auth::user()->id, ['search' => '']);
+                return ['success' => true, 'action' => 'deleted_note', 'type' => 'user', 'page_id' => $notes->first()->note_id];
+            }
+
+            // Deletes note if it belongs to the admin
             if ($note->delete()) {
                 $notes = (new GetNotes)->handle(Auth::user()->id, ['search' => '']);
-                return ['success' => true, 'action' => 'deleted_note', 'page_id' => $notes->first()->note_id];
+                return ['success' => true, 'action' => 'deleted_note', 'type' => 'admin', 'page_id' => $notes->first()->note_id];
             }
         }
         return ['success' => false, 'action' => 'permission_denied'];
@@ -52,7 +62,23 @@ class DestroyNote
             (new DestroyTag)->multiple($note->user_id, $note->note_id);
             // Delete related settings etc
             NotesSettingsRel::where('note_id', $note->note_id)->delete();
+            // Destroy notes relationships
+            NotesRel::where('note_id', $note->note_id)->delete();
+
             $note->forceDelete();
         }
+    }
+
+    private function isOwner(int $noteId, int $userId): bool
+    {
+        $owner = NotesRel::where([
+            ['note_id', $noteId],
+            ['user_id', $userId],
+            ['permission', 'admin'],
+        ])->count();
+        if ($owner) {
+            return true;
+        }
+        return false;
     }
 }
