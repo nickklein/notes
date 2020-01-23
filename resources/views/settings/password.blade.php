@@ -8,15 +8,18 @@
 
             <main class="col-7">
                 <h1>Password</h1>
-
+                <p>You can change your password here</p>
                 <form action="{{route('settings/password/update')}}" method="POST">
                     {{ csrf_field() }}
                     {{ method_field('patch') }}
 
                     <div class="form">
-                        @if (session('password'))
-                            {{session('password')}}
+                        @if (\Session::has('success'))
+                            <div class="alert alert-success">
+                                {{ \Session::get('success') }}
+                            </div>
                         @endif
+
                         <div class="form-group row">
                                 <input id="password" type="password" placeholder="Current Password" class="form-control{{ $errors->has('password') ? ' is-invalid' : '' }}" name="password" value="{{ old('password') }}" required autofocus>
 
