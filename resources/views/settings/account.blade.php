@@ -8,6 +8,7 @@
 
             <main class="col-7">
                 <h1>Account</h1>
+                <p>You can change your email here</p>
 
                 <form action="{{route('settings/account/update')}}" method="POST">
                     {{ csrf_field() }}
