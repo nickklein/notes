@@ -16,6 +16,15 @@ DB_PASSWORD=root
 3. Build the docker environment ```docker-compose up --build```
 4. Log into your server, and use ```php artisan migrate && php artisan db:seed``` to migrate your database
 
-
 ## Front-end
 1. Run ```npm install``` inside the root
+
+--
+
+## Reseting migration and seeders locally (do not run on production)
+```
+php artisan migrate:reset && php artisan migrate && php artisan db:seed
+chown -R tyrion:www-data /var/www/html/
+chmod -R 777 storage
+php artisan passport:install
+```
