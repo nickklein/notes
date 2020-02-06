@@ -85,8 +85,8 @@ class AccountController extends Controller
             return back()->withInput()->withErrors(['password' => 'The password doesn\'t match our records.']);
         }
 
-		$user->password = Hash::make($request->password);
-	    $user->save();
+		$user->password = Hash::make($request->new_password);
+        $user->save();
 		
         return back()->withInput()->withSuccess('You have successfully changed your password');
     }
