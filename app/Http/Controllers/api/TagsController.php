@@ -24,7 +24,7 @@ class TagsController extends Controller
     /**
      * Display a listing of the resource.
      *
-     * @return \Illuminate\Http\Response
+     * @param  Request $request
      */
     public function index(Request $request)
     {
@@ -34,35 +34,35 @@ class TagsController extends Controller
                     ->where('user_id', $userId)
                     ->Where('note_id', $request->id)
                     ->get();
-        return initTags::collection($tagRel);
 
+        return initTags::collection($tagRel);
     }
 
     /**
      * Store a newly created resource in storage.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
+     * @param  TagsRequest  $request
+     * @param  CreateTag  $createTag
+
      */
     public function store(TagsRequest $request, CreateTag $createTag)
     {
         //
         $rel = $createTag->handle(Auth::user()->id, $request->validated());
+
         return new responseTags($rel);
     }
 
     /**
      * Remove the specified resource from storage.
      *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * @param  TagsRequest  $request
+     * @param   DestroyTag $destroyTag
      */
     public function destroy(TagsRequest $request, DestroyTag $destroyTag)
     {
-        //
-
         $rel = $destroyTag->single(Auth::user()->id, $request->validated());
-        return new responseTags($rel);
 
+        return new responseTags($rel);
     }
 }
