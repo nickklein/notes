@@ -27,7 +27,9 @@ class NotesController extends Controller
 
     /**
      * Display a listing of notes
-     *
+     * 
+     * @param Request $request
+     * @param GetNotes $getNotes
      * @return \Illuminate\Http\Response
      */
     public function index(Request $request, GetNotes $getNotes): object
@@ -41,8 +43,9 @@ class NotesController extends Controller
     /**
      * Shows a single note
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
+     * @param  Request  $request
+     * @param GetNotes $getNote
+     * 
      */
     public function show(Request $request, GetNote $getNote): object
     {
@@ -64,6 +67,7 @@ class NotesController extends Controller
         if ($noteId) {
             return response()->json(array('success' => true, 'action' => 'created', 'page_id' => $noteId));
         }
+
         return response()->json(array('success' => false, 'action' => 'not created')); 
     }
 
@@ -83,22 +87,32 @@ class NotesController extends Controller
             $notes = $getNote->handle(Auth::user()->id, $request);
             return response()->json($notes);
         }
+
         return response()->json(array('success' => false));
     }
 
     /**
      * Remove the specified resource from storage.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
+     * @param NotesIdRequest  $request
+     * @param DestroyNote $destroyNote
+     * @return object
      */
     public function destroy(NotesIdRequest $request, DestroyNote $destroyNote): object
     {
         // Destroy note using request
         $response = $destroyNote->handle(Auth::user()->id, $request->validated());
+
         return response()->json($response);
     }
 
+    /**
+     * Remove the specified resource from storage.
+     *
+     * @param  NotesIdRequest  $request
+     * @param  PinNote  $pinNote
+     * @return object
+     */
     public function pin(NotesIdRequest $request, PinNote $pinNote): object
     {
 
