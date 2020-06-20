@@ -36,7 +36,7 @@ class NotesTablesSeeder extends Seeder
 
         NotesSettings::insert($settings);
 
-        //factory(\App\Models\NotesSettingsRel::class, 255)->create();
+        //factory(\notes\Models\NotesSettingsRel::class, 255)->create();
         $notes = Notes::inRandomOrder()->limit(50)->get();
         foreach($notes as $note) {
             $notes_insert[] = array(
