@@ -17,32 +17,36 @@ class GetNotes
         $this->fields = $fields;
 
         // Get Pinned Notes
-        $pinned = $this->pinned();
+        $pinned = $this->pinned($userId, $fields);
 
         // Get Notes
         $excludePinnedIds = $pinned->pluck('note_id')->toArray();
-        $notes = $this->notes($excludePinnedIds);
+        $notes = $this->notes($userId, $fields, $excludePinnedIds);
 
         return $pinned->merge($notes);
     }
-    private function pinned()
-    {
-        $pinned = Notes::RelationshipFilter($this->userId, $this->fields['search'])
-            ->leftJoin('notes_settings_rel', 'notes_settings_rel.note_id', 'notes.note_id')
-            ->where('notes_settings_rel.nsetting_id', 2)
-            ->orderby('notes.updated_at', 'DESC')->get();
 
-        return $this->map($pinned, true);
-    }
-    private function notes(array $excludedIds)
+    public function notes(int $userId, $fields, array $excludedIds = [])
     {
-        $notes = Notes::RelationshipFilter($this->userId, $this->fields['search'])
+        $notes = Notes::RelationshipFilter($userId, $fields['search'])
             ->whereNotIn('notes.note_id', $excludedIds)
             ->orderby('notes.updated_at', 'DESC')
             ->get();
 
         return $this->map($notes, false);
     }
+
+    private function pinned(int $userId, $fields)
+    {
+
+        $pinned = Notes::RelationshipFilter($userId, $fields['search'])
+            ->leftJoin('notes_settings_rel', 'notes_settings_rel.note_id', 'notes.note_id')
+            ->where('notes_settings_rel.nsetting_id', 2)
+            ->orderby('notes.updated_at', 'DESC')->get();
+
+        return $this->map($pinned, true);
+    }
+
     private function map($items, bool $pin)
     {
         return $items->each(function ($note) use ($pin) {

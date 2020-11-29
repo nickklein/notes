@@ -34,8 +34,12 @@ class NotesController extends Controller
      */
     public function index(Request $request, GetNotes $getNotes): object
     {
+        $fields['search'] = '';
+        if (isset($request->search)) {
+            $fields['search'] = $request->search;
+        }
 
-        $notes = $getNotes->handle(Auth::user()->id, $request);
+        $notes = $getNotes->handle(Auth::user()->id, $fields);
 
         return response()->json($notes);
     }

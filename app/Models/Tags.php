@@ -11,7 +11,7 @@ class Tags extends Model
     protected $primaryKey = 'tag_id';
     public $timestamps = false;
 
-    public function scopeCheckTags($query, $tagname) {
-    	return $query->where('tag_name', '=', $tagname);
+    public function scopefindTag($query, $tagName) {
+    	return $query->where('tag_name', '=', $tagName);
     }
 }

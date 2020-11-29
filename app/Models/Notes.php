@@ -30,7 +30,6 @@ class Notes extends Model
 
     public function scopeRelationshipFilter(Builder $query, int $userId, $search) 
     {
-
         return $query
             ->leftJoin('notes_rel', 'notes_rel.note_id', 'notes.note_id')
             ->where('user_id', $userId)

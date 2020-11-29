@@ -12,11 +12,11 @@ class CreateTag
      *
      * @return object
      */
-    public function handle(int $userId, array $fields): object
+    public function handle(int $userId, array $fields): array
     {
         // Check to make sure request wasn't empty
         if (!empty($fields['tag_name'])) {
-            $tag = Tags::checkTags($fields['tag_name'])->first();
+            $tag = Tags::findTag($fields['tag_name'])->first();
 
             if (empty($tag)) {
                 // If Tag needs to be added to the Database
@@ -36,8 +36,10 @@ class CreateTag
             $rel->user_id = $userId;
 
             if ($rel->save()) {
-                return $rel;
+                return $rel->toArray();
             }
         }
+
+        return [];
     }
 }
