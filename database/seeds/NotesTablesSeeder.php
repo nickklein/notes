@@ -1,5 +1,7 @@
 <?php
 
+namespace Database\Seeders;
+
 use notes\Models\Notes;
 use notes\Models\NotesRel;
 use notes\Models\NotesSettings;

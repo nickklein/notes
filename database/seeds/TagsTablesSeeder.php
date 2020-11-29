@@ -1,5 +1,7 @@
 <?php
 
+namespace Database\Seeders;
+
 use notes\Models\Tags;
 use notes\Models\TagsRel;
 use Illuminate\Database\Seeder;
