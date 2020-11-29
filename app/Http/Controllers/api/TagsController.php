@@ -62,7 +62,7 @@ class TagsController extends Controller
     public function destroy(TagsRequest $request, DestroyTag $destroyTag)
     {
         $rel = $destroyTag->single(Auth::user()->id, $request->validated());
-
+        
         return new responseTags($rel);
     }
 }

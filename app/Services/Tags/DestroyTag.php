@@ -13,25 +13,29 @@ class DestroyTag
      *
      * @return object
      */
-    public function single(int $userId, array $fields): object
+    public function single(int $userId, array $fields): array
     {
-        if (!empty($fields['tag_name'])) {
-            $tag = Tags::checkTags($fields['tag_name'])->first();
-            if (!empty($tag)) {
-                $tagsRelationships = TagsRel::where([
-                    'tag_id' => $tag->tag_id,
-                    'user_id' => $userId,
-                    'note_id' => $fields['page_id'],
-                ]);
-                // Get listings in order to clean them up later
-                $fetchTagsRelationships = $tagsRelationships->get();
-                if ($tagsRelationships->delete()) {
-                    // Clean out unused tags, and return tags
-                    $this->cleanLastTags($fetchTagsRelationships);
-                    return $tagsRelationships->first();
-                }
+        // TODO: Convert this into repository instead
+        // Check if Tag exists in the database
+        $tag = Tags::findTag($fields['tag_name'])->first();
+        if (!empty($tag)) {
+            $tagsRelationships = TagsRel::where([
+                'tag_id' => $tag->tag_id,
+                'user_id' => $userId,
+                'note_id' => $fields['page_id'],
+            ]);
+            // Get listings in order to clean them up later
+            $fetchTagsRelationships = $tagsRelationships->get();
+            if ($tagsRelationships->delete()) {
+                // Clean out unused tags, and return tags
+                $this->cleanLastTags($fetchTagsRelationships);
+                return ['success' => true, 'message' => 'Tag was destroyed'];
             }
+
+            return ['success' => false, 'message' => 'Tag was not able to be destroyed'];
         }
+
+        return ['success' => false, 'message' => 'Tag didnt exist'];
     }
 
     /**

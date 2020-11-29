@@ -5,6 +5,7 @@ namespace notes\Services\Notes;
 use notes\Models\Notes;
 use notes\Src\NotesHelper;
 use notes\Services\Encryption;
+use notes\User;
 
 class GetNote
 {
