@@ -7,10 +7,11 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use \Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class User extends Authenticatable
 {
-    use SoftDeletes, HasApiTokens, Notifiable;
+    use SoftDeletes, HasApiTokens, Notifiable, HasFactory;
     /**
      * The attributes that are mass assignable.
      *
