@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use \notes\User;
 
 class UsersTableSeeder extends Seeder
 {
@@ -14,6 +15,6 @@ class UsersTableSeeder extends Seeder
     public function run()
     {
         //
-        factory(\notes\User::class, 50)->create();
+        User::factory()->count(50)->create();
     }
 }

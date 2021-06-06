@@ -25,7 +25,7 @@ class NotesTablesSeeder extends Seeder
         );
 
         // Generate Notes
-        factory(\notes\Models\Notes::class, 500)->create();
+        Notes::factory()->count(500)->create();
 
         for($i = 1; $i < 500; $i++) {
             $note_rel[] = array(
